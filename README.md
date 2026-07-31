@@ -92,3 +92,7 @@ If auto-install did not run, merge [acl/agent-acl-snippet.xml](acl/agent-acl-sni
 ## Security
 
 `eval` executes arbitrary server-side Lua. Restrict network access to the MTA HTTP port and keep credentials private. The Node middleware binds to `127.0.0.1` only.
+
+## License
+
+Released under the [MIT License](LICENSE). Provided **as is**, without warranty of any kind. Use at your own risk — the authors are not responsible for damages or other liability arising from use of this software.
