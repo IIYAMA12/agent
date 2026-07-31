@@ -1,0 +1,13 @@
+<!--
+  Manual ACL fallback for the agent resource.
+  Merge into acl.xml if auto-installation did not run.
+  Replace your_http_user with the same MTA_USER as in node/.env.
+-->
+<group name="agent">
+    <acl name="Agent"></acl>
+    <object name="user.your_http_user"></object>
+</group>
+
+<acl name="Agent">
+    <right name="resource.agent.http" access="true"></right>
+</acl>

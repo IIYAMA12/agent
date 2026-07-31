@@ -1,0 +1,24 @@
+{
+  "name": "agent-middleware",
+  "version": "1.1.0",
+  "description": "MTA agent bridge - middleware HTTP server + MCP adapter",
+  "main": "middleware/index.js",
+  "scripts": {
+    "start": "node middleware/index.js",
+    "restart:middleware": "node scripts/restart-middleware.js",
+    "mcp": "node mcp/index.js",
+    "test:auth": "node test/test-auth.js",
+    "test:debug-log": "node test/debug-log.js",
+    "verify:look": "node test/verify-look.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "zod": "^4.4.3"
+  }
+}

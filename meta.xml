@@ -1,0 +1,105 @@
+<meta>
+    <info author="agent"
+          version="1.0.0"
+          name="agent"
+          type="script"
+          description="HTTP bridge for AI agents — eval, memory, and server API" />
+
+    <min_mta_version both="1.6.0-9.22279.0" />
+
+    <script src="shared/eval.lua" type="shared" />
+    <script src="shared/closest.lua" type="shared" />
+    <script src="shared/element_registry.lua" type="shared" />
+    <script src="shared/element_walker.lua" type="shared" />
+    <script src="shared/locations.lua" type="shared" />
+    <script src="shared/debug_log.lua" type="shared" />
+    <script src="shared/event_hook.lua" type="shared" />
+    <script src="shared/health.lua" type="shared" />
+    <script src="shared/player_resolve.lua" type="shared" />
+    <script src="client/eval.lua" type="client" />
+    <script src="client/visible.lua" type="client" />
+    <script src="client/element_registry.lua" type="client" />
+    <script src="client/gui_walker.lua" type="client" />
+    <script src="client/debug_log.lua" type="client" />
+    <script src="client/event_hook.lua" type="client" />
+    <script src="client/health.lua" type="client" />
+    <script src="client/bridge.lua" type="client" />
+    <script src="server/check-resource-rights_s.lua" type="server" />
+    <script src="server/main.lua" type="server" />
+    <script src="server/client_bridge.lua" type="server" />
+    <script src="server/element_registry.lua" type="server" />
+    <script src="server/memory.lua" type="server" />
+    <script src="server/client_eval.lua" type="server" />
+    <script src="server/visible.lua" type="server" />
+    <script src="server/gui_scan.lua" type="server" />
+    <script src="server/debug_log.lua" type="server" />
+    <script src="server/event_hook.lua" type="server" />
+    <script src="server/health.lua" type="server" />
+    <script src="server/resources.lua" type="server" />
+    <script src="server/teleport.lua" type="server" />
+    <script src="server/api.lua" type="server" />
+    <script src="server/installation_s.lua" type="server" />
+
+    <export function="ping" http="true" type="server" />
+    <export function="eval" http="true" type="server" />
+    <export function="evalClient" http="true" type="server" />
+    <export function="evalClientResult" http="true" type="server" />
+    <export function="findNearby" http="true" type="server" />
+    <export function="findVisible" http="true" type="server" />
+    <export function="findVisibleResult" http="true" type="server" />
+    <export function="findLookTarget" http="true" type="server" />
+    <export function="findLookTargetResult" http="true" type="server" />
+    <export function="teleportToClosestAirport" http="true" type="server" />
+    <export function="getAreaMap" http="true" type="server" />
+    <export function="listAreas" http="true" type="server" />
+    <export function="findClosestArea" http="true" type="server" />
+    <export function="teleportToArea" http="true" type="server" />
+    <export function="teleportToElement" http="true" type="server" />
+    <export function="teleportToPlayer" http="true" type="server" />
+    <export function="teleportToPosition" http="true" type="server" />
+    <export function="runEval" type="client" />
+    <export function="memoryGet" http="true" type="server" />
+    <export function="memorySet" http="true" type="server" />
+    <export function="memoryDelete" http="true" type="server" />
+    <export function="memoryList" http="true" type="server" />
+    <export function="callExport" http="true" type="server" />
+    <export function="getServerState" http="true" type="server" />
+    <export function="resourceStart" http="true" type="server" />
+    <export function="resourceStop" http="true" type="server" />
+    <export function="resourceRestart" http="true" type="server" />
+    <export function="resourceSearch" http="true" type="server" />
+    <export function="elementTrack" http="true" type="server" />
+    <export function="elementGet" http="true" type="server" />
+    <export function="elementList" http="true" type="server" />
+    <export function="elementRelease" http="true" type="server" />
+    <export function="elementModify" http="true" type="server" />
+    <export function="elementResolve" http="true" type="server" />
+    <export function="elementWalk" http="true" type="server" />
+    <export function="elementResult" http="true" type="server" />
+    <export function="guiScan" http="true" type="server" />
+    <export function="guiScanResult" http="true" type="server" />
+    <export function="debugLogList" http="true" type="server" />
+    <export function="debugLogResult" http="true" type="server" />
+    <export function="debugEvents" http="true" type="server" />
+    <export function="debugEventsResult" http="true" type="server" />
+    <export function="healthGet" http="true" type="server" />
+    <export function="healthResult" http="true" type="server" />
+    <export function="resolvePlayer" http="true" type="server" />
+
+    <aclrequest>
+        <!-- permanent runtime -->
+        <right name="function.loadstring" access="true" />
+        <right name="function.startResource" access="true" />
+        <right name="function.stopResource" access="true" />
+        <right name="function.restartResource" access="true" />
+        <!-- install-only (revoked after first successful install) -->
+        <right name="function.aclCreateGroup" access="true" />
+        <right name="function.aclCreate" access="true" />
+        <right name="function.aclSetRight" access="true" />
+        <right name="function.aclGroupAddACL" access="true" />
+        <right name="function.aclGroupAddObject" access="true" />
+        <right name="function.aclSave" access="true" />
+        <right name="function.updateResourceACLRequest" access="true" />
+        <right name="general.ModifyOtherObjects" access="true" />
+    </aclrequest>
+</meta>
