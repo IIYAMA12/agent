@@ -2,6 +2,7 @@
   "name": "agent-middleware",
   "version": "1.1.0",
   "description": "MTA agent bridge - middleware HTTP server + MCP adapter",
+  "license": "MIT",
   "main": "middleware/index.js",
   "scripts": {
     "start": "node middleware/index.js",
