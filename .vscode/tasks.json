@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "MTA: Open status dashboard (external browser)",
+      "type": "shell",
+      "command": "Start-Process 'http://127.0.0.1:3847/dashboard'",
+      "options": {
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-Command"]
+        }
+      },
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -11,6 +11,22 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Node binary for middleware child processes.
+ * Cursor MCP runs under a bundled Node that often mismatches better-sqlite3's ABI;
+ * prefer NODE_BINARY or PATH `node` in that case.
+ */
+function resolveNodeBinary() {
+  if (process.env.NODE_BINARY) {
+    return process.env.NODE_BINARY;
+  }
+  const execPath = process.execPath || "";
+  if (/[\\/]cursor[\\/].*[\\/]helpers[\\/]node(\.exe)?$/i.test(execPath)) {
+    return "node";
+  }
+  return execPath || "node";
+}
+
 function getMiddlewareHost() {
   return process.env.MIDDLEWARE_HOST || "127.0.0.1";
 }
@@ -152,7 +168,8 @@ function startMiddleware(options = {}) {
   const host = options.host || getMiddlewareHost();
   const port = options.port || getMiddlewarePort();
   const entry = path.join(NODE_ROOT, "middleware/index.js");
-  const child = spawn(process.execPath, [entry], {
+  const nodeBinary = resolveNodeBinary();
+  const child = spawn(nodeBinary, [entry], {
     cwd: NODE_ROOT,
     detached: true,
     stdio: "ignore",
@@ -170,6 +187,7 @@ function startMiddleware(options = {}) {
     host,
     port,
     entry,
+    nodeBinary,
   };
 }
 
@@ -436,7 +454,7 @@ async function ensureMiddlewareRunning(options = {}) {
 function scheduleSelfRestart(options = {}) {
   const scriptPath = path.join(NODE_ROOT, "scripts/restart-middleware.js");
   const delayMs = options.delayMs || 500;
-  spawn(process.execPath, [scriptPath, String(delayMs)], {
+  spawn(resolveNodeBinary(), [scriptPath, String(delayMs)], {
     cwd: NODE_ROOT,
     detached: true,
     stdio: "ignore",
@@ -541,6 +559,7 @@ module.exports = {
   NODE_ROOT,
   getMiddlewareHost,
   getMiddlewarePort,
+  resolveNodeBinary,
   isPortOpen,
   findListeningPids,
   getMiddlewareStatus,

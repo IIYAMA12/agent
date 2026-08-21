@@ -277,6 +277,7 @@ The **agent** MTA resource exposes an HTTP API on the game server so an AI agent
 - Resolve players by **name or serial** (`resolvePlayer`, `AGENT_PLAYER_SERIAL`)
 - Read/write key-value memory (in-memory + SQLite on MTA and Node)
 - Query server state (players + serials, resources, map)
+- **Search / start / stop / restart / refresh** other MTA resources (`resourceSearch`, `resourceStart`, … / [`refreshResources`](https://wiki.multitheftauto.com/wiki/RefreshResources))
 - Proxy calls to other MTA resource exports
 
 Optional **Node middleware** (`node/`) proxies MTA HTTP when the agent cannot reach port 22005 directly, and provides a separate local memory store.
@@ -344,7 +345,7 @@ restart agent
 
 Without this, auto-install and `loadstring` eval will not work.
 
-**Permanent rights** (kept): `function.loadstring`, `function.startResource`, `function.stopResource`, `function.restartResource`.
+**Permanent rights** (kept): `function.loadstring`, `function.startResource`, `function.stopResource`, `function.restartResource`, `function.refreshResources`.
 
 **Install-only rights** (auto-denied after success): ACL create/group helpers, `aclSetRight`, `aclSave`, `updateResourceACLRequest`, `general.ModifyOtherObjects`.
 
@@ -468,7 +469,7 @@ Base: `http://<host>:<httpport>/agent`
 
 Auth: `Authorization: Basic base64(user:pass)` or `curl -u user:pass`.
 
-**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `debugLogList`, `debugLogResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`
+**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `debugLogList`, `debugLogResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`, `resourceRefresh`, `resourceSearch`
 
 **Router paths:**
 
@@ -493,9 +494,11 @@ Auth: `Authorization: Basic base64(user:pass)` or `curl -u user:pass`.
 | GET | `/api/elements/:id` | Get tracked element |
 | GET/POST/DELETE | `/api/memory`, `/api/memory/:key` | see README |
 | POST | `/api/call` | `{ "resource", "function", "args": [] }` |
+| GET/POST | `/api/resources/search` | `{ "query"?, "state"?, "limit"?, "exact"? }` |
 | POST | `/api/resources/start` | `{ "resource": "name" }` |
 | POST | `/api/resources/stop` | `{ "resource": "name" }` |
 | POST | `/api/resources/restart` | `{ "resource": "name" }` |
+| POST | `/api/resources/refresh` | `{ "resource"?, "refreshAll"? }` — see [resources](#resources--search--control--refresh) |
 | GET | `/api/state` | Players, `playerDetails` (name + serial), resources |
 
 ### Option B — Node middleware (fallback)
@@ -621,6 +624,13 @@ curl -X POST http://127.0.0.1:3847/mta/features/look.target \
 | `gui.scan` | Client CEGUI scan — open windows, widget trees (async poll) |
 | `gui.windows` | Lightweight open-window list |
 | `debug.list` | Recent MTA debug messages (server sync; client/all async). Last 500, anti-dupe |
+| `resources.search` | Fuzzy resource name search (prefer over dumping all via `getServerState`) |
+| `resources.control` | `action`: `start` \| `stop` \| `restart` \| `refresh` — see [resources](#resources--search--control--refresh) |
+| `models.generate` | Build simple DFF/TXD/COL (box/plane/prism) under `models/<uuid>/` — see [models](#models--generate--import--in-game-test) |
+| `models.import.list` | List PNGs in `models/import/` drop folder |
+| `models.list` / `models.get` / `models.delete` | Manage generated UUID builds |
+| `models.test` | Replace a stock model in-game + spawn preview near player (async) |
+| `models.restore` | Undo replace / destroy preview |
 | `eval.server` | Server Lua via loadstring (**middleware HTTP gate:** `ALLOW_HTTP_EVAL=1`) |
 | `eval.client` | Client Lua on a player (auto-polls; not gated by `ALLOW_HTTP_EVAL`) |
 | `agent.restart` / `middleware.restart` / `system.restart` | Restart services (`ALLOW_RESTART=1`) |
@@ -637,7 +647,112 @@ Add new features in `node/shared/features/*.js` via `registry.register(id, { des
 | `0` (default) | Blocks middleware `POST /mta/eval` and MCP `eval.server` / `mta_eval_server` |
 | `1` | Allows arbitrary **server-side** Lua via those middleware/MCP paths |
 
-**Not gated:** `eval.client`, typed features (`teleport.*`, `gui.scan`, `debug.list`, `elements.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
+**Not gated:** `eval.client`, typed features (`teleport.*`, `gui.scan`, `debug.list`, `elements.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
+
+---
+
+### Resources — search / control / refresh
+
+Prefer typed features over raw eval when managing other MTA resources.
+
+**Search** (`resources.search` / `resourceSearch`):
+
+```bash
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"resources.search\",\"query\":\"infil\",\"limit\":10}"
+```
+
+**Start / stop / restart** (`resources.control`):
+
+```bash
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"resources.control\",\"action\":\"start\",\"resource\":\"infiltration\"}"
+```
+
+**Refresh** — wraps [`refreshResources`](https://wiki.multitheftauto.com/wiki/RefreshResources) (find new resources / reload changed ones). Requires ACL `function.refreshResources`.
+
+| Param | Default | Description |
+|---|---|---|
+| `action` | — | Must be `refresh` |
+| `resource` | — | Optional; restrict refresh to this resource |
+| `refreshAll` | `false` | `false` = new resources + errored only; `true` = check for file changes (can lag briefly) |
+
+```bash
+# Discover new / fix errored resources
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"resources.control\",\"action\":\"refresh\"}"
+
+# Pick up file changes on one resource
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"resources.control\",\"action\":\"refresh\",\"resource\":\"infiltration\",\"refreshAll\":true}"
+```
+
+Direct MTA: `POST /agent/call/resourceRefresh` with `[{ "resource"?: "...", "refreshAll"?: true }]` or router `POST /api/resources/refresh`.
+
+MCP: `mta_resources_control` / `mta_run_feature` with `"feature": "resources.control"`.
+
+---
+
+### Models — generate / import / in-game test
+
+Middleware builds simple textured RenderWare models (inspired by dungeon `build/`) into UUID folders.
+
+**Layout:**
+
+```
+models/
+  import/           # DROP ZONE — put PNG/JPG here
+  <uuid>/           # each generate creates one folder
+    meta.json
+    model.dff
+    model.txd
+    model.col
+    texture.png
+```
+
+**Workflow:**
+
+```bash
+# 1) Drop a PNG or JPG into models/import/, then list
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"models.import.list\"}"
+
+# 2) Generate (textureFile under import/, or solid color / texturePath)
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"models.generate\",\"shape\":\"box\",\"sizeX\":1,\"sizeY\":1,\"sizeZ\":1,\"textureFile\":\"brick.jpg\",\"compression\":\"dxt1\"}"
+
+# 3) Test in-game (player online + agent client loaded)
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"models.test\",\"id\":\"YOUR-UUID\",\"player\":\"YourName\"}"
+
+# 4) Restore stock model
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"models.restore\",\"player\":\"YourName\"}"
+```
+
+| Param (generate) | Description |
+|---|---|
+| `shape` | `box` (default), `plane`, or `prism` |
+| `sizeX` / `sizeY` / `sizeZ` | Full extents (meters) |
+| `sides` | Prism side count (default 8) |
+| `textureFile` | Path relative to `models/import/` (`.png`, `.jpg`, `.jpeg`) |
+| `texturePath` | Absolute or agent-root-relative PNG/JPG |
+| `color` | Solid RGB (`#4488cc` or `{r,g,b}`) when no texture file |
+| `compression` | `dxt1` (default) or `none` |
+| `textureSize` | Power-of-two size (default 256) |
+| `modelId` | Stock object ID to replace on test (default 1851) |
+
+MCP: `mta_models_generate`, `mta_models_test`, `mta_models_import_list`, etc.
+
+After Lua/`meta.xml` changes: `restart agent` + reconnect. After Node changes: restart middleware.
 
 ---
 

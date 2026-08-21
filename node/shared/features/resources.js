@@ -15,16 +15,28 @@ function registerResourceFeatures(registry) {
 
   registry.register("resources.control", {
     description:
-      "Start, stop, or restart an MTA resource by name. Prefer resources.search first when the exact name is unknown.",
+      "Start, stop, restart, or refresh an MTA resource. Prefer resources.search first when the exact name is unknown. For refresh: omit resource to scan for new/errored resources; set refreshAll=true to check file changes (can lag); pass resource to limit refresh to one resource.",
     params: {
       action: { optional: false },
-      resource: { optional: false },
+      resource: { optional: true },
+      refreshAll: { optional: true },
     },
     run: (mta, params = {}) => {
       const action = params.action;
+      if (!action) {
+        return Promise.reject(new Error("action is required"));
+      }
+
+      if (action === "refresh") {
+        return mta.resourceRefresh({
+          resource: params.resource,
+          refreshAll: params.refreshAll === true,
+        });
+      }
+
       const resource = params.resource;
-      if (!action || !resource) {
-        return Promise.reject(new Error("action and resource are required"));
+      if (!resource) {
+        return Promise.reject(new Error("resource is required"));
       }
 
       const exportName =
@@ -37,7 +49,9 @@ function registerResourceFeatures(registry) {
               : null;
 
       if (!exportName) {
-        return Promise.reject(new Error('action must be "start", "stop", or "restart"'));
+        return Promise.reject(
+          new Error('action must be "start", "stop", "restart", or "refresh"')
+        );
       }
 
       return mta.invoke(exportName, [resource]);

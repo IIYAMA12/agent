@@ -1,4 +1,4 @@
---- Resource start/stop/restart controls and fuzzy resource-name search.
+--- Resource start/stop/restart/refresh controls and fuzzy resource-name search.
 ---@class Agent
 Agent = Agent or {}
 
@@ -93,6 +93,57 @@ function Agent.resourceRestart(resourceName)
     end
 
     return true, resourceSnapshot(resourceElement)
+end
+
+--- Find new resources and/or reload changed ones via refreshResources.
+--- refreshAll=false (default): new resources + resources with errors only.
+--- refreshAll=true: check for file changes (can lag briefly; prefer with a target resource).
+---@param options AgentResourceRefreshOptions|string|table|nil options table, or bare resource name
+---@return boolean ok
+---@return AgentResourceRefreshResult|table|string|nil result
+function Agent.resourceRefresh(options)
+    if type(options) == "string" then
+        options = { resource = options }
+    elseif type(options) ~= "table" then
+        options = {}
+    end
+
+    local refreshAll = options.refreshAll == true
+    local resourceName = options.resource or options.name or options.targetResource
+    local targetResource = nil
+
+    if type(resourceName) == "string" and resourceName ~= "" then
+        local err
+        targetResource, err = resolveResource(resourceName)
+        if not targetResource then
+            return false, err or "Resource not found"
+        end
+    end
+
+    local ok
+    if targetResource then
+        ok = refreshResources(refreshAll, targetResource)
+    else
+        ok = refreshResources(refreshAll)
+    end
+
+    if not ok then
+        if targetResource then
+            return false, "Failed to refresh resource: " .. getResourceName(targetResource)
+        end
+        return false, "Failed to refresh resources"
+    end
+
+    ---@type AgentResourceRefreshResult|table
+    local result = {
+        refreshed = true,
+        refreshAll = refreshAll,
+    }
+    if targetResource then
+        result.resource = resourceSnapshot(targetResource)
+    end
+
+    return true, result
 end
 
 ---@param options AgentResourceSearchOptions|table|nil

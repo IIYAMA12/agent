@@ -1,0 +1,50 @@
+---
+description: Remind user when mta-agent MCP is unavailable or when editing MCP/middleware Node bridge
+globs: node/mcp/**,node/middleware/**,node/shared/**,.cursor/mcp.json
+alwaysApply: true
+---
+
+# MTA agent MCP reminders
+
+When working with the MTA agent bridge:
+
+1. **MCP unavailable** — If `mta-agent` is not in available MCP servers, or `CallMcpTool` fails for it, tell the user explicitly before falling back to direct HTTP/curl/scripts. Say that MCP is disabled or not connected and suggest reloading MCP in Cursor Settings. Primary config: global `~/.cursor/mcp.json` (absolute path to `node/mcp/index.js`). Local backup template: `.cursor/mcp.json.local` (workspace-relative). **Middleware auto-starts** when MCP connects (`ensureMiddlewareRunning` in `node/mcp/index.js`) and **auto-stops** when the last MCP disconnects (graceful shutdown or middleware watchdog if Cursor kills MCP without firing exit hooks). Manual `npm start` in `node/` is only needed if auto-start fails.
+
+2. **Editing mta-agent code** — When creating or modifying files under `node/mcp/`, `node/middleware/`, `node/shared/`, or `.cursor/mcp.json`, tell the user that mta-agent MCP or middleware may need a reload/restart:
+   - Middleware changes → restart `npm start`
+   - MCP server changes → reload MCP in Cursor
+
+3. **Prefer MCP** — When `mta-agent` MCP is available, use `mta_run_feature` or feature-specific tools instead of ad-hoc shell/curl, unless the user asks otherwise.
+
+4. **Auto-restart (when enabled)** — If `ALLOW_RESTART=1` in `node/.env`, the agent may restart services without asking each time:
+   - **Agent MTA resource:** `mta_restart_agent`, feature `agent.restart`, or `POST /admin/restart/agent`
+   - **Node middleware:** `mta_restart_middleware`, feature `middleware.restart`, `npm run restart:middleware`, or `POST /admin/restart/middleware`
+   - **Both:** `mta_restart_all`, feature `system.restart`
+   - Check status: `mta_system_status`, feature `system.status`, or `GET /admin/status`
+   - After Lua/`meta.xml` changes → restart agent (auto if allowed). After `node/` changes → restart middleware. Reload MCP in Cursor after MCP code changes.
+   - **GUI understanding:** use `gui.scan` / `gui.windows` to inspect client-local CEGUI (open windows, widget trees). Default focuses on visible windows the player has open.
+   - **Debug logs:** use `debug.list` for recent server/client MTA debug output (`onDebugMessage` / `onClientDebugMessage`, last 500, anti-dupe).
+   - **Event tracing:** use `debug.events` when debugging event flow — on-demand `preEvent` hooks (`action: start` → reproduce → `action: list` → `action: stop`). Filter with `events: ["onPlayerJoin"]`. Suggest when user traces missing/wrong handlers.
+   - **Process health:** use `health.get` for memory, **CPU %**, network, client GPU/RAM (`dxGetStatus`), transfer box — `side: all` merges server + client.
+   - **Live status (cached):** open `http://127.0.0.1:3847/dashboard` in a browser or Cursor Simple Browser; JSON at `GET /api/status`. MCP resource `mta://server/status` for agents (refreshed every ~8s by middleware).
+   - **Resources:** use `resources.search` to find resource names/states (do not dump all 300 via `getServerState`). Then `resources.control` with `action: start|stop|restart|refresh` (`refreshAll: true` + optional `resource` to pick up file changes via `refreshResources`).
+   - **Player identity:** prefer `serial` or `AGENT_PLAYER_SERIAL` over name — names can change or collide; serial is stable per client install.
+   - If `ALLOW_RESTART=0`, ask the user before restarting MTA resources or middleware.
+
+## Agent shortcuts (prefer these over raw eval/HTTP)
+
+| Task | Feature |
+|------|---------|
+| Find a resource | `resources.search { query: "infil" }` |
+| Start/stop/restart resource | `resources.control { action: "start", resource: "infiltration" }` |
+| Refresh resources (new/changed) | `resources.control { action: "refresh" }` or `{ action: "refresh", resource: "infiltration", refreshAll: true }` |
+| Server/client health | `health.get { side: "server" }` |
+| Debug output | `debug.list { side: "all" }` |
+| Trace events | `debug.events { action: "start" }` → reproduce → `list` → `stop` |
+| Who is online | `getServerState` or `GET /health` (playerDetails with serials) |
+| Client GUI | `gui.scan { serial: "..." }` |
+| Resource element tops | `elements.walk { mode: "resourceTops", query: "infil", autoTrack: true }` → use returned `agentId`s; `elements.track { mtaHandle, parentMtaHandle }` for children |
+| Generate simple model | `models.generate { shape: "box", textureFile: "brick.jpg" }` (drop PNG/JPG in `models/import/`) |
+| List import textures | `models.import.list` |
+| Test model in-game | `models.test { id: "<uuid>" }` → `models.restore` |
+| Restart agent/middleware | `agent.restart` / `middleware.restart` (when ALLOW_RESTART=1) |

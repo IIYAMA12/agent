@@ -789,6 +789,26 @@ end
 
 ---@param request AgentHttpRequest
 ---@return AgentJsonResponse
+local function routeResourceRefresh(request)
+    local body = {}
+    if request.body and request.body ~= "" then
+        local parsed, err = parseJsonBody(request.body)
+        if not parsed then
+            return Agent.errorResponse(err, 400)
+        end
+        body = parsed
+    end
+
+    local result = resourceRefresh(body)
+    if not result.ok then
+        return Agent.errorResponse(result.error, 400)
+    end
+
+    return Agent.okResponse(result)
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
 local function routeResourceSearch(request)
     local body = {}
     if request.body and request.body ~= "" then
@@ -873,6 +893,51 @@ local function serveResourceFile(path)
         },
         body = content,
     }
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeModelReplaceTest(request)
+    local body, err = parseJsonBody(request.body)
+    if not body then
+        return Agent.errorResponse(err, 400)
+    end
+    local result = modelReplaceTest(body.player, body)
+    if not result.ok then
+        return Agent.errorResponse(result.error, 400)
+    end
+    return Agent.okResponse(result)
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeModelReplaceTestResult(request)
+    local id = request.path:match("^/api/models/test/(.+)$")
+    if not id or id == "" then
+        return Agent.errorResponse("Request id required", 400)
+    end
+    local result = modelReplaceTestResult(id)
+    if not result.ok and result.error == "Request not found" then
+        return Agent.errorResponse(result.error, 404)
+    end
+    if not result.ok then
+        return Agent.errorResponse(result.error, 400)
+    end
+    return Agent.okResponse(result)
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeModelRestore(request)
+    local body, err = parseJsonBody(request.body)
+    if not body then
+        return Agent.errorResponse(err, 400)
+    end
+    local result = modelRestore(body.player, body)
+    if not result.ok then
+        return Agent.errorResponse(result.error, 400)
+    end
+    return Agent.okResponse(result)
 end
 
 ---@param request AgentHttpRequest
@@ -1011,6 +1076,22 @@ function httpRouter(request)
 
     if method == "POST" and path == "/api/resources/restart" then
         return routeResourceAction("restart", request)
+    end
+
+    if method == "POST" and path == "/api/resources/refresh" then
+        return routeResourceRefresh(request)
+    end
+
+    if method == "POST" and path == "/api/models/test" then
+        return routeModelReplaceTest(request)
+    end
+
+    if method == "GET" and path:match("^/api/models/test/.+$") then
+        return routeModelReplaceTestResult(request)
+    end
+
+    if method == "POST" and path == "/api/models/restore" then
+        return routeModelRestore(request)
     end
 
     if path:match("^/api/") then

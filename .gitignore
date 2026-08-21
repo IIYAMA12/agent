@@ -1,5 +1,6 @@
-.codegraph
-.vscode
-.cursor
-node/.env
+.node/.env
 node/node_modules
+models/*
+!models/.gitignore
+!models/import/
+!models/import/.gitkeep

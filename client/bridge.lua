@@ -116,6 +116,20 @@ local function dispatchElementAction(action, payload)
         return { ok = true, result = Agent.getClientHealthSnapshot(payload) }
     end
 
+    if action == "modelReplace" then
+        if type(Agent.applyModelReplace) ~= "function" then
+            return { ok = false, error = "Model replace unavailable on client" }
+        end
+        return Agent.applyModelReplace(payload)
+    end
+
+    if action == "modelRestore" then
+        if type(Agent.restoreModelReplace) ~= "function" then
+            return { ok = false, error = "Model restore unavailable on client" }
+        end
+        return Agent.restoreModelReplace(payload)
+    end
+
     return nil
 end
 

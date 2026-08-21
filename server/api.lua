@@ -408,6 +408,26 @@ function resourceRestart(resourceName)
     return { ok = true, resource = result }
 end
 
+---@param options AgentResourceRefreshOptions|string|table|nil options table, or bare resource name
+---@return table
+function resourceRefresh(options)
+    if type(options) == "string" then
+        options = { resource = options }
+    elseif type(options) ~= "table" then
+        options = {}
+    end
+
+    local label = options.resource or options.name or options.targetResource or "*"
+    Agent.logHttp("resourceRefresh", tostring(label))
+
+    local success, result = Agent.resourceRefresh(options)
+    if not success then
+        return { ok = false, error = result }
+    end
+
+    return { ok = true, result = result }
+end
+
 ---@param options AgentResourceSearchOptions|string|nil resource search options table, or bare query string
 ---@return AgentResourceSearchResult
 function resourceSearch(options)
@@ -888,4 +908,43 @@ function resolvePlayer(identifier, options)
     end
 
     return { ok = true, player = info }
+end
+
+---@param playerName string|nil
+---@param options table|nil
+---@return table
+function modelReplaceTest(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("modelReplaceTest", (playerName or "*") .. " modelId=" .. tostring(options.modelId or "*"))
+
+    local id, err = Agent.startModelReplaceTest(playerName, options)
+    if not id then
+        return { ok = false, error = err }
+    end
+    return { ok = true, id = id, status = "pending" }
+end
+
+---@param id any
+---@return table
+function modelReplaceTestResult(id)
+    Agent.logHttp("modelReplaceTestResult", tostring(id))
+    return Agent.getModelReplaceResult(id)
+end
+
+---@param playerName string|nil
+---@param options table|nil
+---@return table
+function modelRestore(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("modelRestore", (playerName or "*") .. " modelId=" .. tostring(options.modelId or "*"))
+
+    local id, err = Agent.startModelRestore(playerName, options)
+    if not id then
+        return { ok = false, error = err }
+    end
+    return { ok = true, id = id, status = "pending" }
 end

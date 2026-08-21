@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mta-agent": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/node/mcp/index.js"],
+      "env": {
+        "MIDDLEWARE_URL": "http://127.0.0.1:3847"
+      }
+    }
+  }
+}

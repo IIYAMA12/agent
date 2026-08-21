@@ -733,6 +733,17 @@ restartResource = nil
 ---@field name string
 ---@field state string
 
+---@class AgentResourceRefreshOptions
+---@field resource? string target resource name (restricts refresh to this resource)
+---@field name? string alias for resource
+---@field targetResource? string alias for resource
+---@field refreshAll? boolean if true, check for file changes (can lag); default false = new + errored only
+
+---@class AgentResourceRefreshResult
+---@field refreshed boolean
+---@field refreshAll boolean
+---@field resource? AgentResourceSnapshot present when a target resource was supplied
+
 ---@class AgentResourceSearchResult
 ---@field ok boolean
 ---@field query string

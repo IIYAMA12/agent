@@ -136,7 +136,23 @@ class MtaClient {
     return this.invoke("resourceRestart", [resource]);
   }
 
-  resourceControl(action, resource) {
+  resourceRefresh(options = {}) {
+    if (typeof options === "string") {
+      options = { resource: options };
+    }
+    return this.invoke("resourceRefresh", [options]);
+  }
+
+  resourceControl(action, resource, options = {}) {
+    if (action === "refresh") {
+      const refreshOpts =
+        typeof options === "object" && options !== null ? { ...options } : {};
+      if (resource) {
+        refreshOpts.resource = resource;
+      }
+      return this.resourceRefresh(refreshOpts);
+    }
+
     const exportName =
       action === "start"
         ? "resourceStart"
@@ -146,7 +162,9 @@ class MtaClient {
             ? "resourceRestart"
             : null;
     if (!exportName) {
-      return Promise.reject(new Error('action must be "start", "stop", or "restart"'));
+      return Promise.reject(
+        new Error('action must be "start", "stop", "restart", or "refresh"')
+      );
     }
     return this.invoke(exportName, [resource]);
   }

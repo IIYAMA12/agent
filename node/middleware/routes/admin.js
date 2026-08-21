@@ -5,6 +5,7 @@ const {
   restartMiddleware,
   restartAgentResource,
   restartAgentAndMiddleware,
+  resolveNodeBinary,
 } = require("../../shared/lib/middleware-process");
 const { spawn } = require("child_process");
 const path = require("path");
@@ -41,7 +42,7 @@ function registerAdminRoutes(app, ctx) {
       if (!ensureRestartAllowed(res)) return;
 
       const scriptPath = path.join(__dirname, "../../scripts/restart-middleware.js");
-      spawn(process.execPath, [scriptPath, "500"], {
+      spawn(resolveNodeBinary(), [scriptPath, "500"], {
         cwd: path.join(__dirname, "../.."),
         detached: true,
         stdio: "ignore",

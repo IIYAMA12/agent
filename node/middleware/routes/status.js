@@ -948,15 +948,25 @@ function registerStatusRoutes(app, ctx) {
     asyncRoute(async (req, res) => {
       const action = String(req.body?.action || "").trim();
       const resource = String(req.body?.resource || "").trim();
-      if (!resource) {
+      const refreshAll = req.body?.refreshAll === true;
+      if (!["start", "stop", "restart", "refresh"].includes(action)) {
+        return failure(
+          res,
+          {
+            message: 'action must be "start", "stop", "restart", or "refresh"',
+            code: "BAD_ACTION",
+          },
+          400
+        );
+      }
+      if (action !== "refresh" && !resource) {
         return failure(res, { message: "resource is required", code: "RESOURCE_REQUIRED" }, 400);
       }
-      if (!["start", "stop", "restart"].includes(action)) {
-        return failure(res, { message: 'action must be "start", "stop", or "restart"', code: "BAD_ACTION" }, 400);
-      }
-      const result = await ctx.mta.resourceControl(action, resource);
+      const result = await ctx.mta.resourceControl(action, resource || undefined, {
+        refreshAll,
+      });
       refreshStatus(ctx).catch(() => {});
-      success(res, { action, resource, result });
+      success(res, { action, resource: resource || null, refreshAll, result });
     })
   );
 

@@ -9,6 +9,7 @@ const { registerGuiFeatures } = require("./gui");
 const { registerDebugFeatures } = require("./debug");
 const { registerHealthFeatures } = require("./health");
 const { registerResourceFeatures } = require("./resources");
+const { registerModelFeatures } = require("./models");
 
 const registry = new FeatureRegistry();
 
@@ -22,6 +23,7 @@ registerGuiFeatures(registry);
 registerDebugFeatures(registry);
 registerHealthFeatures(registry);
 registerResourceFeatures(registry);
+registerModelFeatures(registry);
 
 function listFeatures() {
   return registry.list();
