@@ -34,6 +34,7 @@ addEventHandler(Agent.CLIENT_EVENT_READY, resourceRoot, function()
     end
 
     Agent.loadedClients[client] = true
+    Agent.pushLocalClientFiles(client)
 end)
 
 local thisResource = getThisResource()
@@ -52,6 +53,160 @@ end)
 ---@return boolean
 function Agent.isClientLoaded(player)
     return Agent.loadedClients[player] == true
+end
+
+---@type string[]
+Agent.localClientFiles = Agent.localClientFiles or {}
+
+---@param raw string
+---@return string|nil
+local function normalizeLocalClientPath(raw)
+    if type(raw) ~= "string" then
+        return nil
+    end
+    local path = raw:gsub("\\", "/"):gsub("^/+", "")
+    if path:find("%.%.", 1, true) or path:find(":", 1, true) or path:find("//", 1, true) then
+        return nil
+    end
+    if not path:match("^local/client/[%w%._%-%/]+%.lua$") then
+        return nil
+    end
+    return path
+end
+
+---@param path string
+---@return string|nil data
+---@return string|nil error
+local function readLocalClientFile(path)
+    if not fileExists(path) then
+        return nil, "file not found"
+    end
+    local fh = fileOpen(path, true)
+    if not fh then
+        return nil, "file not found"
+    end
+    local size = fileGetSize(fh) or 0
+    local data = ""
+    if size > 0 then
+        data = fileRead(fh, size)
+    end
+    fileClose(fh)
+    if type(data) ~= "string" then
+        return nil, "read failed"
+    end
+    return data
+end
+
+---@param files table
+---@return table[] readable
+---@return table[] report
+local function resolveLocalClientFiles(files)
+    local readable = {}
+    local report = {}
+    local seen = {}
+    for i = 1, #files do
+        local path = normalizeLocalClientPath(files[i])
+        if not path then
+            report[#report + 1] = { file = tostring(files[i]), ok = false, error = "path not allowed" }
+        elseif seen[path] then
+            report[#report + 1] = { file = path, ok = true }
+        else
+            seen[path] = true
+            local data, err = readLocalClientFile(path)
+            if not data then
+                report[#report + 1] = { file = path, ok = false, error = err }
+            else
+                readable[#readable + 1] = { file = path, code = data }
+                report[#report + 1] = { file = path, ok = true }
+            end
+        end
+    end
+    table.sort(readable, function(a, b)
+        return a.file < b.file
+    end)
+    return readable, report
+end
+
+---@param player player
+---@param readable table[]
+local function pushFilesToPlayer(player, readable)
+    if not Agent.isClientLoaded(player) then
+        return false
+    end
+    local name = getPlayerName(player)
+    for i = 1, #readable do
+        local entry = readable[i]
+        local sent = Agent.callClient(player, "loadLocalScript", {
+            file = entry.file,
+            code = entry.code,
+        }, function(response)
+            if type(response) == "table" and response.ok == false then
+                outputDebugString(
+                    "[agent] local client script " .. entry.file .. " on " .. tostring(name) .. ": " .. tostring(response.error),
+                    1
+                )
+            end
+        end)
+        if not sent then
+            return false
+        end
+    end
+    return true
+end
+
+---@param player player|nil
+function Agent.pushLocalClientFiles(player)
+    if #Agent.localClientFiles == 0 then
+        return
+    end
+    local readable = resolveLocalClientFiles(Agent.localClientFiles)
+    if player then
+        pushFilesToPlayer(player, readable)
+        return
+    end
+    for _, online in ipairs(getElementsByType("player")) do
+        if Agent.isClientLoaded(online) then
+            pushFilesToPlayer(online, readable)
+        end
+    end
+end
+
+---@param files table
+---@return table
+function Agent.reloadLocalClient(files)
+    if type(files) ~= "table" then
+        return { ok = false, error = "files is required" }
+    end
+
+    local list = {}
+    for i = 1, #files do
+        local path = normalizeLocalClientPath(files[i])
+        if path then
+            list[#list + 1] = path
+        end
+    end
+    table.sort(list)
+    Agent.localClientFiles = list
+
+    local readable, report = resolveLocalClientFiles(files)
+    local players = {}
+    for _, online in ipairs(getElementsByType("player")) do
+        local loaded = Agent.isClientLoaded(online)
+        local sent = false
+        if loaded and #readable > 0 then
+            sent = pushFilesToPlayer(online, readable)
+        end
+        local row = {
+            name = getPlayerName(online),
+            sent = sent == true,
+        }
+        if not sent then
+            row.reason = loaded and (#readable == 0 and "no readable scripts" or "client not loaded") or "client not loaded"
+        end
+        players[#players + 1] = row
+    end
+
+    return { ok = true, files = report, players = players }
 end
 
 ---@param player player

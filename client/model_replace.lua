@@ -52,13 +52,22 @@ local function clearActive(modelId)
     if active.col then
         engineRestoreCOL(modelId)
     end
+    if active.txd then
+        destroyElement(active.txd)
+    end
     activeByModel[modelId] = nil
+end
+
+---@param modelId integer
+function Agent.clearModelPreview(modelId)
+    clearActive(modelId)
 end
 
 ---@param payload table
 ---@return AgentHttpPayload
 function Agent.applyModelReplace(payload)
     payload = type(payload) == "table" and payload or {}
+
     local modelId = tonumber(payload.modelId) or Agent.MODEL_REPLACE_DEFAULT_ID
     local encoding = payload.encoding or "base64"
     local compressed = payload.compressed or "gzip"
@@ -71,40 +80,53 @@ function Agent.applyModelReplace(payload)
     if not txdData then
         return { ok = false, error = "txd: " .. tostring(txdErr) }
     end
-    local colData, colErr = decodePayload(payload.col, encoding, compressed)
-    if not colData then
-        return { ok = false, error = "col: " .. tostring(colErr) }
+    local colData = nil
+    if type(payload.col) == "string" and payload.col ~= "" then
+        local colErr
+        colData, colErr = decodePayload(payload.col, encoding, compressed)
+        if not colData then
+            return { ok = false, error = "col: " .. tostring(colErr) }
+        end
     end
 
     clearActive(modelId)
 
-    local col = engineLoadCOL(colData)
-    if not col then
-        return { ok = false, error = "engineLoadCOL failed" }
-    end
-    if not engineReplaceCOL(col, modelId) then
-        destroyElement(col)
-        return { ok = false, error = "engineReplaceCOL failed" }
+    local col = nil
+    if colData then
+        col = engineLoadCOL(colData)
+        if not col then
+            return { ok = false, error = "engineLoadCOL failed" }
+        end
+        if not engineReplaceCOL(col, modelId) then
+            destroyElement(col)
+            return { ok = false, error = "engineReplaceCOL failed" }
+        end
     end
 
     local txd = engineLoadTXD(txdData, true)
     if not txd then
-        engineRestoreCOL(modelId)
-        destroyElement(col)
+        if col then
+            engineRestoreCOL(modelId)
+            destroyElement(col)
+        end
         return { ok = false, error = "engineLoadTXD failed" }
     end
     engineImportTXD(txd, modelId)
 
     local dff = engineLoadDFF(dffData)
     if not dff then
-        engineRestoreCOL(modelId)
-        destroyElement(col)
+        if col then
+            engineRestoreCOL(modelId)
+            destroyElement(col)
+        end
         destroyElement(txd)
         return { ok = false, error = "engineLoadDFF failed" }
     end
     if not engineReplaceModel(dff, modelId) then
-        engineRestoreCOL(modelId)
-        destroyElement(col)
+        if col then
+            engineRestoreCOL(modelId)
+            destroyElement(col)
+        end
         destroyElement(txd)
         destroyElement(dff)
         return { ok = false, error = "engineReplaceModel failed" }

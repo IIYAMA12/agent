@@ -1,5 +1,9 @@
 .node/.env
 node/node_modules
+node/local/*
+!node/local/.gitkeep
+local/client/*
+!local/client/actions.lua
 models/*
 !models/.gitignore
 !models/import/

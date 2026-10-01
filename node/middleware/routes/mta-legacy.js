@@ -1,6 +1,7 @@
 const { success, asyncRoute } = require("../../shared/lib/respond");
 const { withPlayerFromBody } = require("../../shared/lib/player-session");
 const { httpError } = require("../../shared/lib/http-error");
+const { assertLuaEvalCode } = require("../../shared/lib/lua-syntax");
 const { createMtaClient } = require("../../shared/config");
 
 function registerMtaLegacyRoutes(app, ctx) {
@@ -35,6 +36,7 @@ function registerMtaLegacyRoutes(app, ctx) {
       if (!code || typeof code !== "string") {
         throw httpError("code is required", { status: 400 });
       }
+      assertLuaEvalCode(code);
       success(res, await ctx.mta.eval(code));
     })
   );
@@ -46,6 +48,7 @@ function registerMtaLegacyRoutes(app, ctx) {
       if (!body.code || typeof body.code !== "string") {
         throw httpError("code is required", { status: 400 });
       }
+      assertLuaEvalCode(body.code);
       await withPlayerFromBody(ctx, body, async (player) => {
         const evalOptions = body.serial ? { serial: body.serial } : {};
         const result =

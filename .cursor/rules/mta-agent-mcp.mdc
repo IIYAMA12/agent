@@ -44,7 +44,7 @@ When working with the MTA agent bridge:
 | Who is online | `getServerState` or `GET /health` (playerDetails with serials) |
 | Client GUI | `gui.scan { serial: "..." }` |
 | Resource element tops | `elements.walk { mode: "resourceTops", query: "infil", autoTrack: true }` → use returned `agentId`s; `elements.track { mtaHandle, parentMtaHandle }` for children |
-| Generate simple model | `models.generate { shape: "box", textureFile: "brick.jpg" }` (drop PNG/JPG in `models/import/`) |
+| Generate simple model | `models.generate { shape: "box", textureFile: "brick.jpg" }` (box/plane/prism/sphere; drop PNG/JPG in `models/import/`) |
 | List import textures | `models.import.list` |
 | Test model in-game | `models.test { id: "<uuid>" }` → `models.restore` |
 | Restart agent/middleware | `agent.restart` / `middleware.restart` (when ALLOW_RESTART=1) |

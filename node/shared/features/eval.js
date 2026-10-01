@@ -1,4 +1,5 @@
 const { httpError } = require("../lib/http-error");
+const { assertLuaEvalCode } = require("../lib/lua-syntax");
 const { normalizeClientEvalResult } = require("../lib/client-eval");
 
 function registerEvalFeatures(registry) {
@@ -20,6 +21,7 @@ function registerEvalFeatures(registry) {
       if (!params.code || typeof params.code !== "string") {
         throw httpError("code is required", { status: 400 });
       }
+      assertLuaEvalCode(params.code);
       return mta.eval(params.code);
     },
   });
@@ -32,6 +34,7 @@ function registerEvalFeatures(registry) {
       if (!params.code || typeof params.code !== "string") {
         throw httpError("code is required", { status: 400 });
       }
+      assertLuaEvalCode(params.code);
       if (!params.player && !params.serial) {
         throw httpError("player or serial is required for client eval", {
           status: 400,

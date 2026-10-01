@@ -626,9 +626,9 @@ curl -X POST http://127.0.0.1:3847/mta/features/look.target \
 | `debug.list` | Recent MTA debug messages (server sync; client/all async). Last 500, anti-dupe |
 | `resources.search` | Fuzzy resource name search (prefer over dumping all via `getServerState`) |
 | `resources.control` | `action`: `start` \| `stop` \| `restart` \| `refresh` — see [resources](#resources--search--control--refresh) |
-| `models.generate` | Build simple DFF/TXD/COL (box/plane/prism) under `models/<uuid>/` — see [models](#models--generate--import--in-game-test) |
-| `models.import.list` | List PNGs in `models/import/` drop folder |
-| `models.list` / `models.get` / `models.delete` | Manage generated UUID builds |
+| `models.generate` | Build simple DFF/TXD/COL (box/plane/prism/sphere) under `models/<date>_<uuid>/` — see [models](#models--generate--import--in-game-test) |
+| `models.import.list` | List PNG/JPG files in `models/import/` drop folder |
+| `models.list` / `models.get` / `models.delete` | Manage generated dated builds |
 | `models.test` | Replace a stock model in-game + spawn preview near player (async) |
 | `models.restore` | Undo replace / destroy preview |
 | `eval.server` | Server Lua via loadstring (**middleware HTTP gate:** `ALLOW_HTTP_EVAL=1`) |
@@ -636,7 +636,7 @@ curl -X POST http://127.0.0.1:3847/mta/features/look.target \
 | `agent.restart` / `middleware.restart` / `system.restart` | Restart services (`ALLOW_RESTART=1`) |
 | `system.status` | Middleware listen status + restart policy |
 
-Add new features in `node/shared/features/*.js` via `registry.register(id, { description, params, run })`.
+Add new features in `node/shared/features/*.js` via `registry.register(id, { description, params, run })`. Gitignored `node/local/features/*.js` modules that export `register(registry)` are loaded after the built-in features. Gitignored `node/local/models/*.js` modules can claim extra generate shapes. Client scripts in `local/client/` are loaded with a `meta.xml` glob (`cache="false"`) and may register `Agent.clientActions`.
 
 ### ALLOW_HTTP_EVAL — middleware HTTP server-eval gate
 
@@ -706,7 +706,7 @@ Middleware builds simple textured RenderWare models (inspired by dungeon `build/
 ```
 models/
   import/           # DROP ZONE — put PNG/JPG here
-  <uuid>/           # each generate creates one folder
+  <YYYY-MM-DD_HHMMSS>_<uuid>/   # each generate creates one dated folder
     meta.json
     model.dff
     model.txd
@@ -740,8 +740,11 @@ curl -X POST http://127.0.0.1:3847/mta/do \
 
 | Param (generate) | Description |
 |---|---|
-| `shape` | `box` (default), `plane`, or `prism` |
+| `shape` | `box` (default), `plane`, `prism`, or `sphere` (alias `ball`) |
 | `sizeX` / `sizeY` / `sizeZ` | Full extents (meters) |
+| `diameter` / `radius` | Sphere size (prefer one; `sizeX` also acts as diameter) |
+| `segments` / `points` | Sphere longitude slices (4–64, default 16) — more = smoother |
+| `rings` / `bands` | Sphere latitude bands (2–48, default ~segments/2) |
 | `sides` | Prism side count (default 8) |
 | `textureFile` | Path relative to `models/import/` (`.png`, `.jpg`, `.jpeg`) |
 | `texturePath` | Absolute or agent-root-relative PNG/JPG |

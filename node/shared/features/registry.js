@@ -16,6 +16,11 @@ class FeatureRegistry {
     return this;
   }
 
+  unregister(id) {
+    this.features.delete(id);
+    return this;
+  }
+
   get(id) {
     return this.features.get(id) || null;
   }

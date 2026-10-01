@@ -268,10 +268,8 @@ function Agent.runEval(code)
         return false, "Code must be a non-empty string"
     end
 
-    local notReturned
     local commandFunction, errorMsg = loadstring("return " .. code)
     if errorMsg then
-        notReturned = true
         commandFunction, errorMsg = loadstring(code)
     end
 
@@ -288,10 +286,6 @@ function Agent.runEval(code)
     local results = { pcall(commandFunction) }
     if not results[1] then
         return false, tostring(results[2])
-    end
-
-    if notReturned then
-        return true, nil
     end
 
     return true, Agent.serializeResults(results)

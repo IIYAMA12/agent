@@ -127,7 +127,22 @@ local function dispatchElementAction(action, payload)
         if type(Agent.restoreModelReplace) ~= "function" then
             return { ok = false, error = "Model restore unavailable on client" }
         end
-        return Agent.restoreModelReplace(payload)
+        local result = Agent.restoreModelReplace(payload)
+        local hooks = Agent.clientActions
+        if hooks and type(hooks.afterModelRestore) == "function" then
+            hooks.afterModelRestore(payload)
+        end
+        return result
+    end
+
+    if action == "loadLocalScript" then
+        return Agent.loadLocalScript(payload)
+    end
+
+    local hooks = Agent.clientActions
+    local handler = hooks and hooks[action]
+    if type(handler) == "function" then
+        return handler(payload)
     end
 
     return nil
@@ -172,6 +187,28 @@ addEventHandler(REQUEST_EVENT, resourceRoot, function(requestId, action, payload
     local response = dispatchClientAction(action, payload)
     triggerServerEvent(RESPONSE_EVENT, resourceRoot, requestId, response)
 end)
+
+---@param payload table|nil
+---@return AgentHttpPayload
+function Agent.loadLocalScript(payload)
+    payload = type(payload) == "table" and payload or {}
+    local code = payload.code
+    if type(code) ~= "string" or code == "" then
+        return { ok = false, error = "code is required", file = payload.file }
+    end
+
+    local fn, err = loadstring(code)
+    if not fn then
+        return { ok = false, error = tostring(err), file = payload.file }
+    end
+
+    local ok, result = pcall(fn)
+    if not ok then
+        return { ok = false, error = tostring(result), file = payload.file }
+    end
+
+    return { ok = true, file = payload.file }
+end
 
 addEventHandler("onClientResourceStart", resourceRoot, function()
     Agent.initRegistry(getRealTime().timestamp, Agent.ELEMENT_SIDE_CLIENT)

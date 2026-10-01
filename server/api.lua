@@ -948,3 +948,48 @@ function modelRestore(playerName, options)
     end
     return { ok = true, id = id, status = "pending" }
 end
+
+---@param playerName string|nil
+---@param options table|nil
+---@return table
+---@param options table|nil `{ files: string[] }` paths under `local/client/`
+---@return table
+function reloadLocalClient(options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("reloadLocalClient", tostring(#(options.files or options)))
+    return Agent.reloadLocalClient(options.files or options)
+end
+
+function clientAction(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    local action = options.action
+    if type(action) ~= "string" or action == "" then
+        return { ok = false, error = "action is required" }
+    end
+    Agent.logHttp("clientAction", (playerName or "*") .. " action=" .. action)
+
+    local player, err = Agent.resolvePlayerElement(playerName, options)
+    if not player then
+        return { ok = false, error = err }
+    end
+
+    local id, startErr = Agent.startClientRequest(player, action, options, {
+        timeoutMs = tonumber(options.timeoutMs) or 30000,
+        serial = options.serial,
+    })
+    if not id then
+        return { ok = false, error = startErr }
+    end
+    return { ok = true, id = id, status = "pending" }
+end
+
+---@param id any
+---@return table
+function clientActionResult(id)
+    Agent.logHttp("clientActionResult", tostring(id))
+    return Agent.getClientRequestResult(id)
+end

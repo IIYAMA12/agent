@@ -13,15 +13,39 @@ const {
   ensureModelsLayout,
   DEFAULT_MODEL_ID,
 } = require("../models");
+const { findLocalShape } = require("../models/local-shapes");
 
 function toBase64Gzip(buf) {
   return zlib.gzipSync(buf).toString("base64");
 }
 
+function buildTestPayload(buffers, params) {
+  const meta = buffers.meta;
+  const modelId = Number(params.modelId) || meta.modelId || DEFAULT_MODEL_ID;
+
+  const payload = {
+    id: buffers.id,
+    modelId,
+    dff: toBase64Gzip(buffers.dff),
+    txd: toBase64Gzip(buffers.txd),
+    compressed: "gzip",
+    encoding: "base64",
+    offsetDistance: params.offsetDistance != null ? Number(params.offsetDistance) : 3,
+    offsetZ: params.offsetZ != null ? Number(params.offsetZ) : 0,
+    serial: params.serial,
+  };
+
+  if (buffers.col) {
+    payload.col = toBase64Gzip(buffers.col);
+  }
+
+  return payload;
+}
+
 function registerModelFeatures(registry) {
   registry.register("models.generate", {
     description:
-      "Generate a simple DFF/TXD/COL model (box/plane/prism) with optional DXT1 texture. Drop PNG/JPG in models/import/ and pass textureFile, or use texturePath / solid color.",
+      "Generate a simple DFF/TXD/COL model (box/plane/prism/sphere) with optional DXT1 texture. Drop PNG/JPG in models/import/ and pass textureFile.",
     params: {
       shape: { optional: true },
       sizeX: { optional: true },
@@ -30,8 +54,13 @@ function registerModelFeatures(registry) {
       width: { optional: true },
       depth: { optional: true },
       height: { optional: true },
+      diameter: { optional: true },
       radius: { optional: true },
       sides: { optional: true },
+      segments: { optional: true },
+      rings: { optional: true },
+      points: { optional: true },
+      bands: { optional: true },
       color: { optional: true },
       textureFile: { optional: true },
       texturePath: { optional: true },
@@ -40,6 +69,7 @@ function registerModelFeatures(registry) {
       modelId: { optional: true },
       name: { optional: true },
       clamp: { optional: true },
+      col: { optional: true },
     },
     run: async (_mta, params) => {
       ensureModelsLayout();
@@ -58,7 +88,7 @@ function registerModelFeatures(registry) {
   });
 
   registry.register("models.list", {
-    description: "List generated model builds under models/<uuid>/",
+    description: "List generated model builds under models/<date>_<uuid>/",
     params: {},
     run: async () => ({ models: listModels() }),
   });
@@ -91,7 +121,7 @@ function registerModelFeatures(registry) {
 
   registry.register("models.test", {
     description:
-      "Apply a generated model replace in-game (engineLoad/Replace) and spawn a preview object near the player",
+      "Apply a generated model replace in-game (engineLoad/Replace) and spawn a preview object near the player.",
     params: {
       id: { required: true },
       player: { optional: true },
@@ -109,19 +139,12 @@ function registerModelFeatures(registry) {
         throw httpError(error.message || String(error), { status: 404, code: "MODEL_NOT_FOUND" });
       }
 
-      const modelId = Number(params.modelId) || buffers.meta.modelId || DEFAULT_MODEL_ID;
-      const payload = {
-        id: buffers.id,
-        modelId,
-        dff: toBase64Gzip(buffers.dff),
-        txd: toBase64Gzip(buffers.txd),
-        col: toBase64Gzip(buffers.col),
-        compressed: "gzip",
-        encoding: "base64",
-        offsetDistance: params.offsetDistance != null ? Number(params.offsetDistance) : 3,
-        offsetZ: params.offsetZ != null ? Number(params.offsetZ) : 0,
-        serial: params.serial,
-      };
+      const local = findLocalShape(buffers.meta && buffers.meta.shape);
+      if (local && typeof local.test === "function") {
+        return local.test(mta, params, buffers);
+      }
+
+      const payload = buildTestPayload(buffers, params);
 
       return pollAsyncJob(
         () => mta.invoke("modelReplaceTest", [params.player || null, payload]),
@@ -150,6 +173,7 @@ function registerModelFeatures(registry) {
       );
     },
   });
+
 }
 
 module.exports = { registerModelFeatures };

@@ -12,6 +12,26 @@ local function resolvePlayer(playerName, options)
     return Agent.resolvePlayerElement(playerName, options)
 end
 
+---@param options table
+---@return table
+local function buildModelReplacePayload(options)
+    local payload = {
+        id = options.id,
+        modelId = tonumber(options.modelId) or 1851,
+        dff = options.dff,
+        txd = options.txd,
+        encoding = options.encoding or "base64",
+        compressed = options.compressed or "gzip",
+        offsetDistance = options.offsetDistance,
+        offsetZ = options.offsetZ,
+        serial = options.serial,
+    }
+    if type(options.col) == "string" and options.col ~= "" then
+        payload.col = options.col
+    end
+    return payload
+end
+
 ---@param playerName string|nil
 ---@param options table|nil
 ---@return string|nil id, string|nil error
@@ -23,21 +43,11 @@ function Agent.startModelReplaceTest(playerName, options)
         return nil, err
     end
 
-    if type(options.dff) ~= "string" or type(options.txd) ~= "string" or type(options.col) ~= "string" then
-        return nil, "dff, txd, and col (base64) are required"
+    if type(options.dff) ~= "string" or type(options.txd) ~= "string" then
+        return nil, "dff and txd (base64) are required"
     end
 
-    return Agent.startClientRequest(player, "modelReplace", {
-        id = options.id,
-        modelId = tonumber(options.modelId) or 1851,
-        dff = options.dff,
-        txd = options.txd,
-        col = options.col,
-        encoding = options.encoding or "base64",
-        compressed = options.compressed or "gzip",
-        offsetDistance = options.offsetDistance,
-        offsetZ = options.offsetZ,
-    }, {
+    return Agent.startClientRequest(player, "modelReplace", buildModelReplacePayload(options), {
         timeoutMs = Agent.MODEL_REPLACE_TIMEOUT_MS,
         serial = options.serial,
     })

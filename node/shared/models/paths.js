@@ -39,6 +39,13 @@ function isUuidFolderName(name) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(name);
 }
 
+/** UTC stamp + UUID, e.g. 2026-08-21_195032_<uuid> (also accepts legacy uuid-only folders) */
+function isModelFolderName(name) {
+  if (isUuidFolderName(name)) return true;
+  const m = String(name || "").match(/^(\d{4}-\d{2}-\d{2}_\d{6})_(.+)$/);
+  return Boolean(m && isUuidFolderName(m[2]));
+}
+
 module.exports = {
   getAgentRoot,
   getModelsRoot,
@@ -46,4 +53,5 @@ module.exports = {
   ensureDir,
   ensureModelsLayout,
   isUuidFolderName,
+  isModelFolderName,
 };

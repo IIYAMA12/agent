@@ -3,16 +3,45 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { ensureModelsLayout, getModelsRoot, isUuidFolderName } = require("./paths");
+const { ensureModelsLayout, getModelsRoot, isModelFolderName } = require("./paths");
 const { resolveTextureFile } = require("./import");
 const { decodeImageToBgra, encodeBgraToPng, resizeBgraNearest, solidBgra } = require("./png");
 const { buildGeometry } = require("./geometry");
 const { buildTxd } = require("./txd-builder");
 const { buildDff } = require("./dff-builder");
 const { buildCol } = require("./col-builder");
+const { findLocalShape } = require("./local-shapes");
 
 const DEFAULT_TEXTURE_SIZE = 256;
 const DEFAULT_MODEL_ID = 1851;
+
+/** Filesystem-safe export stamp from a Date (UTC). e.g. 2026-08-21_195032 */
+function exportDateStamp(date = new Date()) {
+  const iso = date.toISOString();
+  return iso.slice(0, 19).replace("T", "_").replace(/:/g, "");
+}
+
+function resolveModelFileNames(dir, meta) {
+  const legacy = {
+    dff: "model.dff",
+    txd: "model.txd",
+    col: "model.col",
+    texture: "texture.png",
+  };
+  const named = meta?.files || {};
+  const files = { meta: path.join(dir, "meta.json") };
+  for (const key of ["dff", "txd", "col", "texture"]) {
+    if (key === "col" && meta?.col === false) continue;
+    const rel = named[key] || legacy[key];
+    if (!rel) continue;
+    let full = path.join(dir, rel);
+    if (!fs.existsSync(full) && named[key] && fs.existsSync(path.join(dir, legacy[key]))) {
+      full = path.join(dir, legacy[key]);
+    }
+    files[key] = full;
+  }
+  return files;
+}
 
 function parseColor(color) {
   if (!color) return { r: 180, g: 180, b: 180, a: 255 };
@@ -42,7 +71,7 @@ function nextPowerOfTwo(n) {
   return Math.min(1024, p);
 }
 
-function resolvePixels(options) {
+function resolveTextureSet(options = {}) {
   const requested = Number(options.textureSize) || DEFAULT_TEXTURE_SIZE;
   const size = nextPowerOfTwo(Math.max(4, requested));
   const textureRef = resolveTextureFile(options);
@@ -51,131 +80,202 @@ function resolvePixels(options) {
     const imageBuf = fs.readFileSync(textureRef.absolutePath);
     const decoded = decodeImageToBgra(imageBuf, textureRef.absolutePath);
     const pixels = resizeBgraNearest(decoded.pixels, decoded.width, decoded.height, size);
+    const textureName =
+      path.basename(textureRef.label, path.extname(textureRef.label)).replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 31) ||
+      "texture";
     return {
-      pixels,
-      size,
-      hasAlpha: decoded.format === "png",
+      textures: [
+        {
+          name: textureName,
+          pixels,
+          size,
+          hasAlpha: decoded.format === "png",
+          clamp: Boolean(options.clamp),
+        },
+      ],
+      primaryName: textureName,
       sourceTexture: { ...textureRef, format: decoded.format },
-      textureName: path.basename(textureRef.label, path.extname(textureRef.label)).replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 31) || "texture",
     };
   }
 
   const color = parseColor(options.color);
   return {
-    pixels: solidBgra(size, color),
-    size,
-    hasAlpha: color.a < 255,
+    textures: [
+      {
+        name: "texture",
+        pixels: solidBgra(size, color),
+        size,
+        hasAlpha: color.a < 255,
+        clamp: Boolean(options.clamp),
+      },
+    ],
+    primaryName: "texture",
     sourceTexture: null,
-    textureName: "texture",
     solidColor: color,
   };
 }
 
+function wantsCol(options, includeCol) {
+  if (options.col === true) return true;
+  if (options.col === false) return false;
+  return includeCol !== false;
+}
+
 /**
- * Generate DFF/TXD/COL into models/<uuid>/
- * @param {object} options
+ * Write one mesh plus its texture (and optional extra DFF parts) into a dated folder.
+ * @param {object} spec
  */
-function generateModel(options = {}) {
+function writeMeshModel(spec) {
   ensureModelsLayout();
-  const id = crypto.randomUUID();
+  const options = spec.options || {};
+  const createdAt = new Date();
+  const stamp = exportDateStamp(createdAt);
+  const uuid = crypto.randomUUID();
+  const id = `${stamp}_${uuid}`;
   const outDir = path.join(getModelsRoot(), id);
   fs.mkdirSync(outDir, { recursive: true });
 
   const compression = options.compression === "none" ? "none" : "dxt1";
   const modelId = Number(options.modelId) || DEFAULT_MODEL_ID;
-  const tex = resolvePixels(options);
-  const vertexColor = options.vertexColor
-    ? [
-        options.vertexColor[0] ?? 255,
-        options.vertexColor[1] ?? 255,
-        options.vertexColor[2] ?? 255,
-      ]
-    : [255, 255, 255];
+  const includeCol = wantsCol(options, spec.includeCol);
+  const texSet = spec.texSet;
+  const geometry = spec.geometry;
 
-  const { quads, boxes } = buildGeometry({
-    shape: options.shape || "box",
-    sizeX: options.sizeX ?? options.width ?? 1,
-    sizeY: options.sizeY ?? options.depth,
-    sizeZ: options.sizeZ ?? options.height ?? 1,
-    radius: options.radius,
-    sides: options.sides,
-    textureName: tex.textureName,
-    vertexColor,
-  });
+  const txd = buildTxd(texSet.textures, { compression });
+  const dff = buildDff(geometry.quads);
+  const col = includeCol ? buildCol(geometry.boxes || [], { modelId, name: options.name || "agentmdl" }) : null;
 
-  const txd = buildTxd(
-    [
-      {
-        name: tex.textureName,
-        pixels: tex.pixels,
-        size: tex.size,
-        hasAlpha: tex.hasAlpha,
-        clamp: Boolean(options.clamp),
-      },
-    ],
-    { compression }
-  );
-  const dff = buildDff(quads);
-  const col = buildCol(boxes, { modelId, name: options.name || "agentmdl" });
+  const extraBuilt = {};
+  const extra = spec.extra || {};
+  for (const [key, part] of Object.entries(extra)) {
+    if (!part) continue;
+    extraBuilt[key] = Buffer.isBuffer(part) ? { data: part, info: null } : buildDff(part.quads);
+  }
 
-  const dffPath = path.join(outDir, "model.dff");
-  const txdPath = path.join(outDir, "model.txd");
-  const colPath = path.join(outDir, "model.col");
-  const pngPath = path.join(outDir, "texture.png");
+  const fileNames = {
+    dff: "model.dff",
+    txd: "model.txd",
+    texture: "texture.png",
+  };
+  if (includeCol) fileNames.col = "model.col";
+  const extraNames = spec.extraNames || {};
+  for (const key of Object.keys(extraBuilt)) {
+    fileNames[key] = extraNames[key] || `${key}.dff`;
+  }
+
+  const dffPath = path.join(outDir, fileNames.dff);
+  const txdPath = path.join(outDir, fileNames.txd);
+  const colPath = includeCol ? path.join(outDir, fileNames.col) : null;
+  const texturePath = path.join(outDir, fileNames.texture);
   const metaPath = path.join(outDir, "meta.json");
 
   fs.writeFileSync(dffPath, dff.data);
   fs.writeFileSync(txdPath, txd.data);
-  fs.writeFileSync(colPath, col.data);
-  fs.writeFileSync(pngPath, encodeBgraToPng(tex.pixels, tex.size, tex.size));
+  if (col) fs.writeFileSync(colPath, col.data);
+  for (const [key, built] of Object.entries(extraBuilt)) {
+    fs.writeFileSync(path.join(outDir, fileNames[key]), built.data);
+  }
+
+  const primaryTex = texSet.textures[0];
+  fs.writeFileSync(texturePath, encodeBgraToPng(primaryTex.pixels, primaryTex.size, primaryTex.size));
 
   const meta = {
     id,
-    createdAt: new Date().toISOString(),
+    uuid,
+    createdAt: createdAt.toISOString(),
+    exportDate: stamp,
     shape: options.shape || "box",
     sizeX: options.sizeX ?? options.width ?? 1,
     sizeY: options.sizeY ?? options.depth ?? options.sizeX ?? 1,
     sizeZ: options.sizeZ ?? options.height ?? 1,
+    diameter: options.diameter ?? null,
+    radius: options.radius ?? null,
     sides: options.sides || null,
+    segments: geometry.segments ?? options.segments ?? options.points ?? null,
+    rings: geometry.rings ?? options.rings ?? options.bands ?? null,
     compression,
-    textureSize: tex.size,
-    textureName: tex.textureName,
-    sourceTexture: tex.sourceTexture
-      ? {
-          source: tex.sourceTexture.source,
-          label: tex.sourceTexture.label,
-          format: tex.sourceTexture.format || null,
-        }
-      : tex.solidColor
-        ? { source: "solid", color: tex.solidColor }
+    textureSize: primaryTex.size,
+    textureName: texSet.primaryName,
+    textures: texSet.textures.map((tex) => ({
+      name: tex.name,
+      size: tex.size,
+      clamp: Boolean(tex.clamp),
+    })),
+    sourceTexture: texSet.sourceTexture
+      ? texSet.sourceTexture.source === "procedural"
+        ? texSet.sourceTexture
+        : {
+            source: texSet.sourceTexture.source,
+            label: texSet.sourceTexture.label,
+            format: texSet.sourceTexture.format || null,
+          }
+      : texSet.solidColor
+        ? { source: "solid", color: texSet.solidColor }
         : null,
     modelId,
-    files: {
-      dff: "model.dff",
-      txd: "model.txd",
-      col: "model.col",
-      texture: "texture.png",
-    },
+    col: includeCol,
+    files: fileNames,
     build: {
       dff: dff.info,
       txd: txd.info,
-      col: col.info,
+      col: col ? col.info : null,
+      ...Object.fromEntries(Object.entries(extraBuilt).map(([key, built]) => [key, built.info])),
     },
+    ...(spec.meta || {}),
   };
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
 
-  return {
-    id,
-    path: outDir,
-    files: {
-      dff: dffPath,
-      txd: txdPath,
-      col: colPath,
-      texture: pngPath,
-      meta: metaPath,
-    },
-    meta,
+  const files = {
+    dff: dffPath,
+    txd: txdPath,
+    texture: texturePath,
+    meta: metaPath,
   };
+  if (colPath) files.col = colPath;
+  for (const key of Object.keys(extraBuilt)) {
+    files[key] = path.join(outDir, fileNames[key]);
+  }
+
+  return { id, path: outDir, files, meta };
+}
+
+/**
+ * Generate DFF/TXD/COL into models/<YYYY-MM-DD_HHMMSS>_<uuid>/
+ * @param {object} options
+ */
+function generateModel(options = {}) {
+  const shape = String(options.shape || "box").toLowerCase();
+  const local = findLocalShape(shape);
+  if (local && typeof local.generate === "function") {
+    return local.generate(options);
+  }
+
+  const texSet = resolveTextureSet(options);
+  const vertexColor = options.vertexColor
+    ? [options.vertexColor[0] ?? 255, options.vertexColor[1] ?? 255, options.vertexColor[2] ?? 255]
+    : [255, 255, 255];
+
+  const geometry = buildGeometry({
+    shape,
+    sizeX: options.sizeX ?? options.width ?? 1,
+    sizeY: options.sizeY ?? options.depth,
+    sizeZ: options.sizeZ ?? options.height ?? 1,
+    diameter: options.diameter,
+    radius: options.radius,
+    sides: options.sides,
+    segments: options.segments ?? options.points,
+    rings: options.rings ?? options.bands,
+    points: options.points,
+    textureName: texSet.primaryName,
+    vertexColor,
+  });
+
+  return writeMeshModel({
+    options: { ...options, shape },
+    texSet,
+    geometry,
+    includeCol: true,
+  });
 }
 
 function listModels() {
@@ -183,7 +283,7 @@ function listModels() {
   const root = getModelsRoot();
   const entries = [];
   for (const name of fs.readdirSync(root)) {
-    if (!isUuidFolderName(name)) continue;
+    if (!isModelFolderName(name)) continue;
     const dir = path.join(root, name);
     if (!fs.statSync(dir).isDirectory()) continue;
     const metaPath = path.join(dir, "meta.json");
@@ -202,7 +302,7 @@ function listModels() {
 }
 
 function getModel(id) {
-  if (!isUuidFolderName(id)) {
+  if (!isModelFolderName(id)) {
     throw new Error("invalid model id");
   }
   const dir = path.join(getModelsRoot(), id);
@@ -211,13 +311,7 @@ function getModel(id) {
   }
   const metaPath = path.join(dir, "meta.json");
   const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-  const files = {
-    dff: path.join(dir, "model.dff"),
-    txd: path.join(dir, "model.txd"),
-    col: path.join(dir, "model.col"),
-    texture: path.join(dir, "texture.png"),
-    meta: metaPath,
-  };
+  const files = resolveModelFileNames(dir, meta);
   const sizes = {};
   for (const [key, filePath] of Object.entries(files)) {
     if (fs.existsSync(filePath)) sizes[key] = fs.statSync(filePath).size;
@@ -233,17 +327,24 @@ function deleteModel(id) {
 
 function readModelBuffers(id) {
   const model = getModel(id);
-  return {
+  const result = {
     id,
     meta: model.meta,
     dff: fs.readFileSync(model.files.dff),
     txd: fs.readFileSync(model.files.txd),
-    col: fs.readFileSync(model.files.col),
+    col: null,
   };
+  if (model.files.col && fs.existsSync(model.files.col)) {
+    result.col = fs.readFileSync(model.files.col);
+  }
+  return result;
 }
 
 module.exports = {
   generateModel,
+  writeMeshModel,
+  parseColor,
+  nextPowerOfTwo,
   listModels,
   getModel,
   deleteModel,
