@@ -229,7 +229,7 @@ Add to `mtaserver.conf`:
 Normal agent loop:
 
 1. **Discover** — `mta_health` / `GET /health` / `getServerState` (includes `playerDetails` with serials)
-2. **Inspect** — `look.target`, `nearby.closest`, `gui.scan`, `debug.list`, `elements.list` / `elements.walk`
+2. **Inspect** — `look.target`, `nearby.closest`, `screen.capture`, `gui.scan`, `debug.list`, `debug.events`, `health.get`, `elements.list` / `elements.walk`
 3. **Act** — `teleport.*`, `elements.track` / `elements.modify`, `eval.client` (client Lua)
 4. **Remember** — Node `POST /memory` for session context (`session.defaultPlayerSerial` for stable player identity)
 
@@ -272,8 +272,11 @@ The **agent** MTA resource exposes an HTTP API on the game server so an AI agent
 - Query elements visible on a player's screen with debug info (`findVisible`)
 - Resolve what a player is looking at via camera + [`isElementOnScreen`](https://wiki.multitheftauto.com/wiki/IsElementOnScreen) (`findLookTarget`)
 - **Track and modify game elements** with stable agent IDs (`elementTrack`, `elementList`, `elementWalk`, …)
+- **Capture the player screen** as a JPEG (`screenCapture` / feature `screen.capture`; HUD, dxDraw, and DGS; chat box and CEGUI excluded)
 - **Scan client GUI** (open windows, CEGUI widget trees via `guiScan`)
 - **Capture debug logs** from [`onDebugMessage`](https://wiki.multitheftauto.com/wiki/OnDebugMessage) / [`onClientDebugMessage`](https://wiki.multitheftauto.com/wiki/OnClientDebugMessage) (`debugLogList`, last 500, anti-dupe)
+- **Trace events** on demand (`debugEvents`: start, reproduce, list, stop)
+- **Read process health** — memory, CPU, network, client GPU (`healthGet`)
 - Resolve players by **name or serial** (`resolvePlayer`, `AGENT_PLAYER_SERIAL`)
 - Read/write key-value memory (in-memory + SQLite on MTA and Node)
 - Query server state (players + serials, resources, map)
@@ -469,7 +472,7 @@ Base: `http://<host>:<httpport>/agent`
 
 Auth: `Authorization: Basic base64(user:pass)` or `curl -u user:pass`.
 
-**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `debugLogList`, `debugLogResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`, `resourceRefresh`, `resourceSearch`
+**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `screenCapture`, `screenCaptureResult`, `debugLogList`, `debugLogResult`, `debugEvents`, `debugEventsResult`, `healthGet`, `healthResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`, `resourceRefresh`, `resourceSearch`
 
 **Router paths:**
 
@@ -486,8 +489,13 @@ Auth: `Authorization: Basic base64(user:pass)` or `curl -u user:pass`.
 | GET | `/api/look/:id` | Poll look-target query |
 | GET/POST | `/api/gui/scan` | `{ "player"?, "serial"?, "windowTitle"?, "trees"?, ... }` → async `{ "id" }` or sync result |
 | GET | `/api/gui/:id` | Poll GUI scan result |
+| POST | `/api/screen` | `{ "player"?, "serial"?, "width"?, "height"?, "quality"? }` → `{ "id", "status": "pending" }` |
+| GET | `/api/screen/:id` | Poll screen capture |
 | GET/POST | `/api/debug/logs` | `{ "side"?: "server"\|"client"\|"all", "player"?, "serial"?, "minLevel"?, "limit"? }` — server sync; client/all async |
 | GET | `/api/debug/:id` | Poll debug log fetch (client/all) |
+| GET/POST | `/api/debug/events` | `{ "action"?: "start"\|"list"\|"stop", "side"?, "events"?, "player"?, "serial"? }` |
+| GET/POST | `/api/health` | `{ "side"?: "server"\|"client"\|"all", "player"?, "serial"? }` — server sync; client/all async |
+| GET | `/api/health/:id` | Poll client health result |
 | GET/POST | `/api/elements/walk` | Element tree walk (`mode`: `roots`, resource name, `flat`, …) |
 | POST | `/api/elements/track` | Register element by handle |
 | GET/POST | `/api/elements` | List tracked elements |
@@ -529,6 +537,8 @@ Base: `http://127.0.0.1:3847`
 | `POST /mta/features/:id` | Run a feature, e.g. `teleport.player`, `teleport.area` |
 | `POST /mta/do` | Run feature by body `{ "feature": "teleport.area", ...params }` |
 | `GET /mta/tools.json` | Machine-readable tool manifest (features + MCP tool names) |
+| `GET /dashboard` | Live status page (players, memory, CPU, network) |
+| `GET /api/status` | Same snapshot as JSON. MCP resource `mta://server/status` |
 | `GET/POST/DELETE /memory` | Local agent memory (not MTA) |
 
 Use middleware when direct access to port 22005 fails (firewall, remote dev machine, tool restrictions).
@@ -562,7 +572,7 @@ AI tool ──stdio──► node/mcp/index.js ──HTTP──► node/middlewa
 | `mta_run_feature` | Run any feature by id + params |
 | `mta_restart_agent`, `mta_restart_middleware`, `mta_restart_all` | Restart services (`ALLOW_RESTART=1`) |
 | `mta_system_status` | Middleware status + restart policy (feature: `system.status`) |
-| `mta_teleport_player`, `mta_eval_client`, `mta_debug_list`, `mta_gui_scan`, … | One tool per feature (auto-generated from `listFeatures()`) |
+| `mta_teleport_player`, `mta_eval_client`, `mta_debug_list`, `mta_gui_scan`, `mta_screen_capture`, … | One tool per feature (auto-generated from `listFeatures()` at MCP start; reload MCP after adding a feature) |
 
 **Player resolution** (when `player` / `serial` omitted):
 
@@ -623,7 +633,10 @@ curl -X POST http://127.0.0.1:3847/mta/features/look.target \
 | `elements.walk` | Walk element tree from root / resource / flat list |
 | `gui.scan` | Client CEGUI scan — open windows, widget trees (async poll) |
 | `gui.windows` | Lightweight open-window list |
+| `screen.capture` | Player screenshot JPEG. Returns `path` (absolute) and `file` (`captures/…`). See [screen capture](#screen-capture--player-view-screencapture) |
 | `debug.list` | Recent MTA debug messages (server sync; client/all async). Last 500, anti-dupe |
+| `debug.events` | On-demand event trace (`action`: `start`, then `list`, then `stop`). Hooks install only after `start` |
+| `health.get` | Process health: memory, CPU, network; client adds GPU/RAM. `side`: `server`, `client`, or `all` |
 | `resources.search` | Fuzzy resource name search (prefer over dumping all via `getServerState`) |
 | `resources.control` | `action`: `start` \| `stop` \| `restart` \| `refresh` — see [resources](#resources--search--control--refresh) |
 | `models.generate` | Build simple DFF/TXD/COL (box/plane/prism/sphere) under `models/<date>_<uuid>/` — see [models](#models--generate--import--in-game-test) |
@@ -647,7 +660,7 @@ Add new features in `node/shared/features/*.js` via `registry.register(id, { des
 | `0` (default) | Blocks middleware `POST /mta/eval` and MCP `eval.server` / `mta_eval_server` |
 | `1` | Allows arbitrary **server-side** Lua via those middleware/MCP paths |
 
-**Not gated:** `eval.client`, typed features (`teleport.*`, `gui.scan`, `debug.list`, `elements.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
+**Not gated:** `eval.client`, typed features (`teleport.*`, `screen.capture`, `gui.scan`, `debug.list`, `elements.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
 
 ---
 
@@ -779,6 +792,34 @@ curl -X POST http://127.0.0.1:3847/mta/features/gui.scan \
 
 MCP: `mta_gui_scan` or `mta_run_feature` with `"feature": "gui.scan"`.
 
+DGS and other dxDraw UI are not CEGUI. Use [screen capture](#screen-capture--player-view-screencapture) to see those.
+
+---
+
+### Screen capture — player view (`screen.capture`)
+
+Capture what the player currently sees (`takePlayerScreenShot`, then poll `onPlayerScreenShot`). Includes the GTA HUD, dxDraw, and DGS. Excludes the chat box and CEGUI. The player must be connected, not minimized, and must allow screen uploads.
+
+Prefer this over reconstructing the UI from widget trees when you need to verify on-screen labels.
+
+```bash
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"screen.capture\",\"width\":1920,\"height\":1080,\"quality\":90}"
+```
+
+| Param | Default | Description |
+|---|---|---|
+| `player` / `serial` | auto | Target client |
+| `width` | `1920` | 16–1920 |
+| `height` | `1080` | 16–1920 |
+| `quality` | `90` | JPEG quality 1–100 |
+| `maxBandwidth` | `1000000` | Upload cap, 1000–2000000 |
+
+Result fields: `path` (absolute JPEG — read this from any workspace), `file` (`captures/<timestamp>_<player>.jpg`, relative to this resource), `player`, `width`, `height`, `bytes`. The newest **30** shots are kept; the oldest JPEG in `captures/` is deleted after that.
+
+MCP: `mta_screen_capture` after reloading MCP, or `mta_run_feature` with `"feature": "screen.capture"`. The tool result includes the absolute path. After an MCP reload it also attaches the JPEG.
+
 ---
 
 ### Debug log fetch (`debug.list`)
@@ -804,6 +845,48 @@ curl -X POST http://127.0.0.1:3847/mta/do \
 | `dedupe` | `true` (default) — collapse adjacent identical lines on merge |
 
 MCP: `mta_debug_list`.
+
+---
+
+### Event trace (`debug.events`)
+
+On-demand [`addDebugHook`](https://wiki.multitheftauto.com/wiki/AddDebugHook) `preEvent` capture. Nothing is hooked until `action` is `start`. Reproduce the bug, then `list`, then `stop`.
+
+```bash
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"debug.events\",\"action\":\"start\",\"events\":[\"onPlayerJoin\"]}"
+```
+
+| Param | Description |
+|---|---|
+| `action` | `start`, `list`, or `stop` |
+| `side` | `server`, `client`, or `all` |
+| `events` | Event names to keep, e.g. `["onPlayerJoin"]` |
+| `player` / `serial` | Required when `side` includes the client |
+
+MCP: `mta_debug_events`.
+
+---
+
+### Process health (`health.get`)
+
+Memory, CPU, and network. Client side also returns GPU/RAM (`dxGetStatus`) and whether the transfer box is active.
+
+```bash
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"health.get\",\"side\":\"all\"}"
+```
+
+| Param | Default | Description |
+|---|---|---|
+| `side` | `server` | `server` (sync), `client`, or `all` (async) |
+| `player` / `serial` | auto | Required for `client` and `all` |
+
+A cached view of the same server stats is at `http://127.0.0.1:3847/dashboard` and `GET /api/status` (MCP resource `mta://server/status`).
+
+MCP: `mta_health_get`.
 
 ---
 
@@ -1192,7 +1275,7 @@ Always read `logs/server.log` and the in-game / server console output after `sta
 Once verified, use this loop to help the user:
 
 1. **Discover** — `getServerState` or `GET /api/state` for players, resources, map
-2. **Inspect** — `findNearby` for closest elements; `findLookTarget` for camera view; `findVisible` for all on-screen elements; `eval` for custom Lua
+2. **Inspect** — `findNearby` for closest elements; `findLookTarget` for camera view; `findVisible` for all on-screen elements; `screen.capture` for a JPEG of the player view; `eval` for custom Lua
 3. **Act** — `eval` or `callExport` to invoke existing resource APIs (prefer exports over raw eval when possible)
 4. **Remember** — store task context in Node `/memory` or MTA `memorySet`
 5. **Verify** — re-query state after changes
@@ -1233,7 +1316,7 @@ agent/
 ├── meta.xml
 ├── client/                ← eval, visible, bridge, gui_walker, debug_log, element_registry
 ├── shared/                ← eval, closest, locations, element_registry, element_walker, debug_log, player_resolve
-├── server/                ← HTTP exports, teleport, memory, gui_scan, debug_log, element_registry
+├── server/                ← HTTP exports, teleport, memory, gui_scan, screen, debug_log, element_registry
 ├── node/
 │   ├── middleware/        ← HTTP server (npm start)
 │   │   ├── index.js

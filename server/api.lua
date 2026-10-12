@@ -813,6 +813,30 @@ function guiScanResult(id)
 end
 
 ---@param playerName string|nil
+---@param options table|nil
+---@return table
+function screenCapture(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("screenCapture", (playerName or "*") .. " " .. tostring(options.width or 1920) .. "x" .. tostring(options.height or 1080))
+
+    local id, err = Agent.startScreenCapture(playerName, options)
+    if not id then
+        return { ok = false, error = err }
+    end
+
+    return { ok = true, id = id, status = "pending" }
+end
+
+---@param id any request id (expected string)
+---@return table
+function screenCaptureResult(id)
+    Agent.logHttp("screenCaptureResult", tostring(id))
+    return Agent.getScreenCaptureResult(id)
+end
+
+---@param playerName string|nil
 ---@param options AgentDebugLogOptions|nil
 ---@return table
 function debugLogList(playerName, options)

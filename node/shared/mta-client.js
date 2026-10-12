@@ -354,6 +354,23 @@ class MtaClient {
     );
   }
 
+  screenCapture(player, options = {}) {
+    return this.invoke("screenCapture", [player, options]);
+  }
+
+  screenCaptureResult(id) {
+    return this.invoke("screenCaptureResult", [id]);
+  }
+
+  screenCaptureComplete(player, options = {}, pollOptions = {}) {
+    const { pollAsyncJob } = require("./lib/mta-async");
+    return pollAsyncJob(
+      () => this.screenCapture(player, options),
+      (id) => this.screenCaptureResult(id),
+      { timeoutMs: 25000, intervalMs: 250, ...pollOptions }
+    );
+  }
+
   healthGet(player, options = {}) {
     return this.invoke("healthGet", [player, options]);
   }

@@ -22,7 +22,8 @@ When working with the MTA agent bridge:
    - **Both:** `mta_restart_all`, feature `system.restart`
    - Check status: `mta_system_status`, feature `system.status`, or `GET /admin/status`
    - After Lua/`meta.xml` changes → restart agent (auto if allowed). After `node/` changes → restart middleware. Reload MCP in Cursor after MCP code changes.
-   - **GUI understanding:** use `gui.scan` / `gui.windows` to inspect client-local CEGUI (open windows, widget trees). Default focuses on visible windows the player has open.
+   - **Player screen:** use `screen.capture` to JPEG the current game view (HUD, dxDraw, DGS). Read the returned absolute `path`. `file` is relative to the agent resource. Chat box and CEGUI are excluded; use `gui.scan` for CEGUI. Keeps the newest 30 shots. Dedicated tool `mta_screen_capture` appears after an MCP reload; until then call `mta_run_feature` with `{ "feature": "screen.capture" }`.
+   - **GUI understanding:** use `gui.scan` / `gui.windows` to inspect client-local CEGUI (open windows, widget trees). Default focuses on visible windows the player has open. DGS is dxDraw and shows up in `screen.capture`, not in `gui.scan`.
    - **Debug logs:** use `debug.list` for recent server/client MTA debug output (`onDebugMessage` / `onClientDebugMessage`, last 500, anti-dupe).
    - **Event tracing:** use `debug.events` when debugging event flow — on-demand `preEvent` hooks (`action: start` → reproduce → `action: list` → `action: stop`). Filter with `events: ["onPlayerJoin"]`. Suggest when user traces missing/wrong handlers.
    - **Process health:** use `health.get` for memory, **CPU %**, network, client GPU/RAM (`dxGetStatus`), transfer box — `side: all` merges server + client.
@@ -42,6 +43,7 @@ When working with the MTA agent bridge:
 | Debug output | `debug.list { side: "all" }` |
 | Trace events | `debug.events { action: "start" }` → reproduce → `list` → `stop` |
 | Who is online | `getServerState` or `GET /health` (playerDetails with serials) |
+| Player screenshot | `screen.capture` — read absolute `path` (HUD, dxDraw, DGS; newest 30 JPEGs) |
 | Client GUI | `gui.scan { serial: "..." }` |
 | Resource element tops | `elements.walk { mode: "resourceTops", query: "infil", autoTrack: true }` → use returned `agentId`s; `elements.track { mtaHandle, parentMtaHandle }` for children |
 | Generate simple model | `models.generate { shape: "box", textureFile: "brick.jpg" }` (box/plane/prism/sphere; drop PNG/JPG in `models/import/`) |

@@ -469,6 +469,53 @@ end
 
 ---@param request AgentHttpRequest
 ---@return AgentJsonResponse
+local function routeScreenCapture(request)
+    local body = {}
+    if request.method == "POST" then
+        local parsed, err = parseJsonBody(request.body)
+        if not parsed then
+            return Agent.errorResponse(err, 400)
+        end
+        body = parsed
+    end
+
+    if request.query then
+        if request.query.player then body.player = request.query.player end
+        if request.query.serial then body.serial = request.query.serial end
+        if request.query.width then body.width = tonumber(request.query.width) end
+        if request.query.height then body.height = tonumber(request.query.height) end
+        if request.query.quality then body.quality = tonumber(request.query.quality) end
+        if request.query.maxBandwidth then body.maxBandwidth = tonumber(request.query.maxBandwidth) end
+    end
+
+    local result = screenCapture(body.player, body)
+    if not result.ok then
+        return Agent.errorResponse(result.error, 400)
+    end
+    return Agent.okResponse(result)
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeScreenCaptureResult(request)
+    local id = request.path:match("^/api/screen/(.+)$")
+    if not id or id == "" then
+        return Agent.errorResponse("Request id required", 400)
+    end
+
+    local result = screenCaptureResult(id)
+    if not result.ok and result.error == "Request not found" then
+        return Agent.errorResponse(result.error, 404)
+    end
+    if not result.ok then
+        return Agent.errorResponse(result.error, 400)
+    end
+
+    return Agent.okResponse(result)
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
 local function routeDebugLogList(request)
     local body = {}
     if request.method == "POST" then
@@ -980,6 +1027,14 @@ function httpRouter(request)
 
     if method == "GET" and path:match("^/api/look/.+$") then
         return routeFindLookTargetResult(request)
+    end
+
+    if (method == "GET" or method == "POST") and path == "/api/screen" then
+        return routeScreenCapture(request)
+    end
+
+    if method == "GET" and path:match("^/api/screen/[^/]+$") then
+        return routeScreenCaptureResult(request)
     end
 
     if (method == "GET" or method == "POST") and path == "/api/gui/scan" then

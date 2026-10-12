@@ -8,3 +8,4 @@ models/*
 !models/.gitignore
 !models/import/
 !models/import/.gitkeep
+captures/

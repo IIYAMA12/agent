@@ -10,6 +10,7 @@ const { registerSystemFeatures } = require("./system");
 const { registerGuiFeatures } = require("./gui");
 const { registerDebugFeatures } = require("./debug");
 const { registerHealthFeatures } = require("./health");
+const { registerScreenFeatures } = require("./screen");
 const { registerResourceFeatures } = require("./resources");
 const { registerModelFeatures } = require("./models");
 
@@ -27,6 +28,7 @@ registerSystemFeatures(registry);
 registerGuiFeatures(registry);
 registerDebugFeatures(registry);
 registerHealthFeatures(registry);
+registerScreenFeatures(registry);
 registerResourceFeatures(registry);
 registerModelFeatures(registry);
 {

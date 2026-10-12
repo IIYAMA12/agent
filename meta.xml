@@ -37,6 +37,7 @@
     <script src="server/debug_log.lua" type="server" />
     <script src="server/event_hook.lua" type="server" />
     <script src="server/health.lua" type="server" />
+    <script src="server/screen.lua" type="server" />
     <script src="server/resources.lua" type="server" />
     <script src="server/teleport.lua" type="server" />
     <script src="server/model_replace.lua" type="server" />
@@ -88,6 +89,8 @@
     <export function="debugEventsResult" http="true" type="server" />
     <export function="healthGet" http="true" type="server" />
     <export function="healthResult" http="true" type="server" />
+    <export function="screenCapture" http="true" type="server" />
+    <export function="screenCaptureResult" http="true" type="server" />
     <export function="resolvePlayer" http="true" type="server" />
     <export function="modelReplaceTest" http="true" type="server" />
     <export function="modelReplaceTestResult" http="true" type="server" />
@@ -103,6 +106,7 @@
         <right name="function.stopResource" access="true" />
         <right name="function.restartResource" access="true" />
         <right name="function.refreshResources" access="true" />
+        <right name="function.takePlayerScreenShot" access="true" />
         <!-- install-only (revoked after first successful install) -->
         <right name="function.aclCreateGroup" access="true" />
         <right name="function.aclCreate" access="true" />

@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const { z } = require("zod");
 const { listFeatures } = require("../shared/features");
 const { featureIdToMcpTool } = require("../shared/lib/tools-manifest");
@@ -10,9 +12,38 @@ const {
 } = require("../shared/lib/middleware-process");
 
 const paramValue = z.union([z.string(), z.number(), z.boolean()]);
+const CAPTURES_DIR = path.resolve(__dirname, "../../captures");
+const MAX_IMAGE_BYTES = 1500000;
+
+function captureImageContent(data) {
+  const filePath = data && typeof data.path === "string" ? data.path : "";
+  if (!filePath.toLowerCase().endsWith(".jpg")) {
+    return null;
+  }
+  const resolved = path.resolve(filePath);
+  const root = CAPTURES_DIR.toLowerCase() + path.sep;
+  if (!resolved.toLowerCase().startsWith(root)) {
+    return null;
+  }
+  let image;
+  try {
+    image = fs.readFileSync(resolved);
+  } catch {
+    return null;
+  }
+  if (image.length < 3 || image.length > MAX_IMAGE_BYTES || image[0] !== 0xff || image[1] !== 0xd8) {
+    return null;
+  }
+  return { type: "image", data: image.toString("base64"), mimeType: "image/jpeg" };
+}
 
 function toolResult(data) {
-  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  const content = [{ type: "text", text: JSON.stringify(data, null, 2) }];
+  const image = captureImageContent(data);
+  if (image) {
+    content.unshift(image);
+  }
+  return { content };
 }
 
 function toolError(error) {
