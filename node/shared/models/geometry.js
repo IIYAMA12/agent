@@ -165,6 +165,119 @@ function sphereGeometry(radius, segments, rings, texture, color) {
   return { quads, boxes, segments: segs, rings: bandCount };
 }
 
+const CRYSTAL_CELL = 0.46;
+const CRYSTAL_TIP = 0.008;
+const CRYSTAL_SIDES = 6;
+const CRYSTAL_SPIKES = [
+  { radius: 0.12, length: 1.22, tipFrac: 0.46, yaw: 0.35, tilt: 0.16, baseDist: 0 },
+  { radius: 0.07, length: 0.62, tipFrac: 0.5, yaw: 0.15, tilt: 0.55, baseDist: 0.05 },
+  { radius: 0.055, length: 0.48, tipFrac: 0.5, yaw: 1.45, tilt: 0.68, baseDist: 0.06 },
+  { radius: 0.065, length: 0.58, tipFrac: 0.48, yaw: 2.55, tilt: 0.5, baseDist: 0.05 },
+  { radius: 0.045, length: 0.4, tipFrac: 0.55, yaw: 3.85, tilt: 0.75, baseDist: 0.06 },
+  { radius: 0.06, length: 0.52, tipFrac: 0.5, yaw: 5.15, tilt: 0.6, baseDist: 0.05 },
+];
+
+function crossNormal(ax, ay, az, bx, by, bz) {
+  const nx = ay * bz - az * by;
+  const ny = az * bx - ax * bz;
+  const nz = ax * by - ay * bx;
+  const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+  return [nx / len, ny / len, nz / len];
+}
+
+/** Pointed hex cluster. Authored in world units; stays inside one 1x1 cell. */
+function crystalGeometry(texture, color) {
+  const palette = makePalette(color);
+  const quads = [];
+  const hz = 0.64;
+  const faceUVs = FACE_UVS;
+
+  function ring(z, radius) {
+    const verts = [];
+    for (let i = 0; i < CRYSTAL_SIDES; i++) {
+      const a = Math.PI / CRYSTAL_SIDES + i * ((2 * Math.PI) / CRYSTAL_SIDES);
+      verts.push([radius * Math.cos(a), radius * Math.sin(a), z]);
+    }
+    return verts;
+  }
+
+  function appendSpike(spec) {
+    const { radius, length, yaw, tilt } = spec;
+    const bodyZ = Math.max(0.02, length * (1 - (spec.tipFrac || 0.5)));
+    const st = Math.sin(tilt);
+    const ct = Math.cos(tilt);
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const baseRing = ring(0, radius);
+    let lift = 0;
+    for (const p of baseRing) {
+      const drop = p[0] * st;
+      if (drop > lift) lift = drop;
+    }
+    const dist = spec.baseDist || 0;
+    const ox = dist * Math.cos(yaw);
+    const oy = dist * Math.sin(yaw);
+    const oz = -hz + lift;
+
+    function xform(p) {
+      const x1 = p[0] * ct + p[2] * st;
+      const z1 = -p[0] * st + p[2] * ct;
+      return [x1 * cy - p[1] * sy + ox, x1 * sy + p[1] * cy + oy, z1 + oz];
+    }
+
+    const shoulder = ring(bodyZ, radius);
+    const tip = ring(length, CRYSTAL_TIP);
+
+    function emit(a, b, c, d, flatten) {
+      const p1 = xform(a);
+      const p2 = xform(b);
+      const p3 = xform(c);
+      const p4 = xform(d);
+      let n = crossNormal(
+        p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2],
+        p3[0] - p1[0], p3[1] - p1[1], p3[2] - p1[2]
+      );
+      if (flatten) {
+        const horiz = Math.sqrt(n[0] * n[0] + n[1] * n[1]) || 1;
+        n = [n[0] / horiz, n[1] / horiz, 0];
+      }
+      quads.push(face(texture, palette, n, p1, p2, p3, p4, faceUVs));
+    }
+
+    for (let i = 0; i < CRYSTAL_SIDES; i++) {
+      const j = (i + 1) % CRYSTAL_SIDES;
+      emit(baseRing[i], baseRing[j], shoulder[j], shoulder[i], true);
+      emit(shoulder[i], shoulder[j], tip[j], tip[i], false);
+    }
+    let a = 1;
+    while (a < CRYSTAL_SIDES - 1) {
+      emit(baseRing[0], baseRing[a + 2], baseRing[a + 1], baseRing[a], false);
+      a += 2;
+    }
+  }
+
+  for (const spec of CRYSTAL_SPIKES) appendSpike(spec);
+
+  let maxAbs = 0;
+  for (const quad of quads) {
+    for (const p of quad.corners) {
+      maxAbs = Math.max(maxAbs, Math.abs(p[0]), Math.abs(p[1]));
+    }
+  }
+  if (maxAbs > CRYSTAL_CELL) {
+    const scale = CRYSTAL_CELL / maxAbs;
+    for (const quad of quads) {
+      for (const p of quad.corners) {
+        p[0] *= scale;
+        p[1] *= scale;
+      }
+    }
+  }
+
+  const boxes = [{ min: [-CRYSTAL_CELL, -CRYSTAL_CELL, -hz], max: [CRYSTAL_CELL, CRYSTAL_CELL, hz] }];
+  return { quads, boxes };
+}
+
 function buildGeometry(options = {}) {
   const shape = String(options.shape || "box").toLowerCase();
   const texture = options.textureName || "texture";
@@ -174,6 +287,10 @@ function buildGeometry(options = {}) {
     const hx = Number(options.sizeX ?? options.width ?? 1) * 0.5;
     const hy = Number(options.sizeY ?? options.depth ?? options.sizeX ?? 1) * 0.5;
     return planeGeometry(hx, hy, texture, color);
+  }
+
+  if (shape === "crystal") {
+    return crystalGeometry(texture, color);
   }
 
   if (shape === "prism") {
@@ -199,5 +316,5 @@ function buildGeometry(options = {}) {
   return boxGeometry(hx, hy, hz, texture, color);
 }
 
-module.exports = { buildGeometry, makePalette, boxGeometry, prismGeometry };
+module.exports = { buildGeometry, makePalette, boxGeometry, prismGeometry, crystalGeometry };
 
