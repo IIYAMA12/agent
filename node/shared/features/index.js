@@ -13,6 +13,7 @@ const { registerHealthFeatures } = require("./health");
 const { registerScreenFeatures } = require("./screen");
 const { registerResourceFeatures } = require("./resources");
 const { registerModelFeatures } = require("./models");
+const { registerBoundingFeatures } = require("./bounding");
 
 const registry = new FeatureRegistry();
 const localFeatureIds = new Set();
@@ -31,6 +32,7 @@ registerHealthFeatures(registry);
 registerScreenFeatures(registry);
 registerResourceFeatures(registry);
 registerModelFeatures(registry);
+registerBoundingFeatures(registry);
 {
   const initial = loadLocalFeatures(registry);
   if (initial.errors.length) {

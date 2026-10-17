@@ -139,6 +139,41 @@ local function dispatchElementAction(action, payload)
         return Agent.loadLocalScript(payload)
     end
 
+    if action == "boundingScanStart" then
+        if type(Agent.startBoundingScanClient) ~= "function" then
+            return { ok = false, error = "Bounding scan unavailable on client" }
+        end
+        return Agent.startBoundingScanClient(payload)
+    end
+
+    if action == "boundingScanStop" then
+        if type(Agent.stopBoundingScanClient) ~= "function" then
+            return { ok = false, error = "Bounding scan unavailable on client" }
+        end
+        return Agent.stopBoundingScanClient(payload)
+    end
+
+    if action == "boundingFetch" then
+        if type(Agent.fetchBoundingClient) ~= "function" then
+            return { ok = false, error = "Bounding fetch unavailable on client" }
+        end
+        return Agent.fetchBoundingClient(payload)
+    end
+
+    if action == "boundingResolve" then
+        if type(Agent.resolveBoundingClient) ~= "function" then
+            return { ok = false, error = "Bounding lookup unavailable on client" }
+        end
+        return Agent.resolveBoundingClient(payload)
+    end
+
+    if action == "boundingDraw" then
+        if type(Agent.drawBoundingClient) ~= "function" then
+            return { ok = false, error = "Bounding draw unavailable on client" }
+        end
+        return Agent.drawBoundingClient(payload)
+    end
+
     local hooks = Agent.clientActions
     local handler = hooks and hooks[action]
     if type(handler) == "function" then
@@ -166,11 +201,33 @@ local function dispatchClientAction(action, payload)
     end
 
     local elementResponse = dispatchElementAction(action, payload)
+    if Agent._deferClientReply then
+        return nil
+    end
     if elementResponse then
         return elementResponse
     end
 
     return { ok = false, error = "Unknown client action: " .. tostring(action) }
+end
+
+---@return string|nil requestId
+function Agent.deferClientResponse()
+    local requestId = Agent._activeClientRequestId
+    if type(requestId) ~= "string" or requestId == "" then
+        return nil
+    end
+    Agent._deferClientReply = true
+    return requestId
+end
+
+---@param requestId string
+---@param response table|nil
+function Agent.replyClientRequest(requestId, response)
+    if type(requestId) ~= "string" or requestId == "" then
+        return
+    end
+    triggerServerEvent(RESPONSE_EVENT, resourceRoot, requestId, response or { ok = false, error = "empty client response" })
 end
 
 addEvent(REQUEST_EVENT, true)
@@ -184,7 +241,15 @@ addEventHandler(REQUEST_EVENT, resourceRoot, function(requestId, action, payload
     end
 
     payload = type(payload) == "table" and payload or {}
+    Agent._deferClientReply = false
+    Agent._activeClientRequestId = requestId
     local response = dispatchClientAction(action, payload)
+    local deferred = Agent._deferClientReply
+    Agent._activeClientRequestId = nil
+    Agent._deferClientReply = false
+    if deferred then
+        return
+    end
     triggerServerEvent(RESPONSE_EVENT, resourceRoot, requestId, response)
 end)
 

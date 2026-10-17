@@ -169,6 +169,12 @@ function Agent.applyModelReplace(payload)
     }
 end
 
+---@param modelId integer|string|nil
+---@return boolean
+function Agent.isModelReplaced(modelId)
+    return activeByModel[tonumber(modelId)] ~= nil
+end
+
 ---@param payload table|nil
 ---@return AgentHttpPayload
 function Agent.restoreModelReplace(payload)

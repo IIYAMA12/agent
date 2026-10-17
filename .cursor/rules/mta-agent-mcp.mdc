@@ -49,4 +49,7 @@ When working with the MTA agent bridge:
 | Generate simple model | `models.generate { shape: "box", textureFile: "brick.jpg" }` (box/plane/prism/sphere; drop PNG/JPG in `models/import/`) |
 | List import textures | `models.import.list` |
 | Test model in-game | `models.test { id: "<uuid>" }` → `models.restore` |
+| Stock bounding boxes | `bounding.scan { action: "start" }` then `{ action: "status", id }` until `status` is `complete`. Does not overwrite stored defaults |
+| Live / modded bounding box | `bounding.fetch { agentId }` or `{ model, elementType }` — element must be streamed in; writes custom only, not defaults |
+| Draw bounding box | `bounding.draw { action: "start", agentId }` or `{ nearby: true }` — verify with `screen.capture` |
 | Restart agent/middleware | `agent.restart` / `middleware.restart` (when ALLOW_RESTART=1) |

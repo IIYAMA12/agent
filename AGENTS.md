@@ -229,7 +229,7 @@ Add to `mtaserver.conf`:
 Normal agent loop:
 
 1. **Discover** — `mta_health` / `GET /health` / `getServerState` (includes `playerDetails` with serials)
-2. **Inspect** — `look.target`, `nearby.closest`, `screen.capture`, `gui.scan`, `debug.list`, `debug.events`, `health.get`, `elements.list` / `elements.walk`
+2. **Inspect** — `look.target`, `nearby.closest`, `screen.capture`, `gui.scan`, `debug.list`, `debug.events`, `health.get`, `elements.list` / `elements.walk`, `bounding.get` / `bounding.draw`
 3. **Act** — `teleport.*`, `elements.track` / `elements.modify`, `eval.client` (client Lua)
 4. **Remember** — Node `POST /memory` for session context (`session.defaultPlayerSerial` for stable player identity)
 
@@ -472,7 +472,7 @@ Base: `http://<host>:<httpport>/agent`
 
 Auth: `Authorization: Basic base64(user:pass)` or `curl -u user:pass`.
 
-**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `screenCapture`, `screenCaptureResult`, `debugLogList`, `debugLogResult`, `debugEvents`, `debugEventsResult`, `healthGet`, `healthResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`, `resourceRefresh`, `resourceSearch`
+**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `screenCapture`, `screenCaptureResult`, `debugLogList`, `debugLogResult`, `debugEvents`, `debugEventsResult`, `healthGet`, `healthResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`, `resourceRefresh`, `resourceSearch`, `boundingScan`, `boundingScanResult`, `boundingGet`, `boundingGetResult`, `boundingFetch`, `boundingFetchResult`, `boundingDraw`, `boundingDrawResult`
 
 **Router paths:**
 
@@ -496,6 +496,13 @@ Auth: `Authorization: Basic base64(user:pass)` or `curl -u user:pass`.
 | GET/POST | `/api/debug/events` | `{ "action"?: "start"\|"list"\|"stop", "side"?, "events"?, "player"?, "serial"? }` |
 | GET/POST | `/api/health` | `{ "side"?: "server"\|"client"\|"all", "player"?, "serial"? }` — server sync; client/all async |
 | GET | `/api/health/:id` | Poll client health result |
+| GET/POST | `/api/bounding/scan` | `{ "action"?: "start"\|"status"\|"stop", "id"?, "types"?, "batch"?, "force"?, "player"?, "serial"? }` — stock bbox catalog |
+| GET | `/api/bounding/scan/:id` | Poll catalog job |
+| GET/POST | `/api/bounding` | Lookup default + custom by `model` / `elementType` or `agentId` |
+| POST | `/api/bounding/fetch` | Live custom bbox read → `{ "id", "status": "pending" }` |
+| GET | `/api/bounding/fetch/:id` | Poll custom fetch (`notStreamedIn` includes cached records) |
+| GET/POST | `/api/bounding/draw` | `{ "action"?: "start"\|"stop"\|"list", "agentId"?, "nearby"?, "model"? }` |
+| GET | `/api/bounding/draw/:id` | Poll wireframe toggle |
 | GET/POST | `/api/elements/walk` | Element tree walk (`mode`: `roots`, resource name, `flat`, …) |
 | POST | `/api/elements/track` | Register element by handle |
 | GET/POST | `/api/elements` | List tracked elements |
@@ -644,6 +651,10 @@ curl -X POST http://127.0.0.1:3847/mta/features/look.target \
 | `models.list` / `models.get` / `models.delete` | Manage generated dated builds |
 | `models.test` | Replace a stock model in-game + spawn preview near player (async) |
 | `models.restore` | Undo replace / destroy preview |
+| `bounding.scan` | Catalog stock `getElementBoundingBox` values (streamed-in client scan). Does not overwrite stored defaults. See [bounding boxes](#bounding-boxes--stock-cache-custom-fetch-wireframe) |
+| `bounding.get` | Lookup `{ default, custom, differsFromDefault }` by model or element |
+| `bounding.fetch` | Live custom read after a model mod. Does not write defaults. `notStreamedIn` if the element is not streamed in |
+| `bounding.draw` | In-game wireframe (editor half-center + `dxDrawLine3D`). Verify with `screen.capture` |
 | `eval.server` | Server Lua via loadstring (**middleware HTTP gate:** `ALLOW_HTTP_EVAL=1`) |
 | `eval.client` | Client Lua on a player (auto-polls; not gated by `ALLOW_HTTP_EVAL`) |
 | `agent.restart` / `middleware.restart` / `system.restart` | Restart services (`ALLOW_RESTART=1`) |
@@ -660,7 +671,7 @@ Add new features in `node/shared/features/*.js` via `registry.register(id, { des
 | `0` (default) | Blocks middleware `POST /mta/eval` and MCP `eval.server` / `mta_eval_server` |
 | `1` | Allows arbitrary **server-side** Lua via those middleware/MCP paths |
 
-**Not gated:** `eval.client`, typed features (`teleport.*`, `screen.capture`, `gui.scan`, `debug.list`, `elements.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
+**Not gated:** `eval.client`, typed features (`teleport.*`, `screen.capture`, `gui.scan`, `debug.list`, `elements.*`, `bounding.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
 
 ---
 
@@ -769,6 +780,66 @@ curl -X POST http://127.0.0.1:3847/mta/do \
 MCP: `mta_models_generate`, `mta_models_test`, `mta_models_import_list`, etc.
 
 After Lua/`meta.xml` changes: `restart agent` + reconnect. After Node changes: restart middleware.
+
+---
+
+### Bounding boxes — stock cache, custom fetch, wireframe
+
+[`getElementBoundingBox`](https://wiki.multitheftauto.com/wiki/GetElementBoundingBox) is **client-only** and returns false unless the element is **streamed in**. Values are model-space, relative to the element position. Raw boxes are what the cache stores. The wireframe applies the map editor's half-center shift — subtract `(min+max)*0.25` on each axis — then draws 12 edges with `dxDrawLine3D`.
+
+Two records, both gitignored under `data/`:
+
+| File | Written by | Rule |
+|---|---|---|
+| `data/bounding-defaults.json` | `bounding.scan` | Stock boxes. Never replaced once stored. `force: true` rewrites them, but skips models this client has replaced through `models.test` |
+| `data/bounding-custom.json` | `bounding.fetch` | Latest live read. A modded model (`engineReplaceModel`) can change the box; fetch records that without touching defaults |
+
+Lookup key is `elementType:model` (`object`, `vehicle`, or `ped`). The server reads these files on the first bounding request after `restart agent`, then keeps them in memory until the next restart.
+
+```bash
+# Start a stock catalog (player online, agent client loaded). Poll until status is complete.
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"bounding.scan\",\"action\":\"start\"}"
+
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"bounding.scan\",\"action\":\"status\",\"id\":\"bb-...\"}"
+
+# Cached stock vs custom
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"bounding.get\",\"model\":1337,\"elementType\":\"object\"}"
+
+# Live read after a model mod. Existing elements must be streamed in.
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"bounding.fetch\",\"agentId\":\"c-...\"}"
+
+# Wireframe. Confirm with screen.capture.
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"bounding.draw\",\"action\":\"start\",\"nearby\":true,\"maxDistance\":40}"
+```
+
+| Param | Feature | Description |
+|---|---|---|
+| `action` | scan | `start` (default), `status`, `stop`. `status` and `stop` need `id` |
+| `types` | scan | `object`, `vehicle`, `ped` (default all) |
+| `batch` | scan | Models spawned per tick (1–16, default 8) |
+| `force` | scan | Rewrite stored defaults. Replaced models are still skipped |
+| `model` / `elementType` | get, fetch, draw | Model id and `object` \| `vehicle` \| `ped` |
+| `agentId` / `mtaHandle` | get, fetch, draw | Resolve a live element. Fetch of an existing element does not spawn a stand-in |
+| `nearby` | draw | Draw streamed elements near the player |
+| `maxDistance` / `limit` | draw | Nearby range (default 80) and cap (default 25) |
+
+`bounding.get` returns `{ default, custom, differsFromDefault }`. `differsFromDefault` is true only when both records exist and the raw min/max differ.
+
+`bounding.fetch` on an element that is not streamed in returns `error: "notStreamedIn"` plus any cached `default` and `custom`. A `model` with no element creates a temporary local element, waits until it streams in, measures, destroys it, and stores **custom** only.
+
+`bounding.draw` uses the live box when the element is streamed in, otherwise custom, then the stock default. `screen.capture` shows the overlay (dxDraw is included).
+
+MCP tools, after a middleware restart and an MCP reload: `mta_bounding_scan`, `mta_bounding_get`, `mta_bounding_fetch`, `mta_bounding_draw`. Until the reload, call `mta_run_feature` with the feature id.
 
 ---
 

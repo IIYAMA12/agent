@@ -9,3 +9,7 @@ models/*
 !models/import/
 !models/import/.gitkeep
 captures/
+data/bounding-defaults.json
+data/bounding-defaults.json.tmp
+data/bounding-custom.json
+data/bounding-custom.json.tmp

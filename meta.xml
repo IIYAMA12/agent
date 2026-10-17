@@ -24,6 +24,7 @@
     <script src="client/event_hook.lua" type="client" />
     <script src="client/health.lua" type="client" />
     <script src="client/model_replace.lua" type="client" />
+    <script src="client/bounding.lua" type="client" />
     <script src="local/client/**/*.lua" type="client" cache="false" />
     <script src="client/bridge.lua" type="client" />
     <script src="server/check-resource-rights_s.lua" type="server" />
@@ -41,6 +42,7 @@
     <script src="server/resources.lua" type="server" />
     <script src="server/teleport.lua" type="server" />
     <script src="server/model_replace.lua" type="server" />
+    <script src="server/bounding.lua" type="server" />
     <script src="server/api.lua" type="server" />
     <script src="server/installation_s.lua" type="server" />
 
@@ -95,6 +97,14 @@
     <export function="modelReplaceTest" http="true" type="server" />
     <export function="modelReplaceTestResult" http="true" type="server" />
     <export function="modelRestore" http="true" type="server" />
+    <export function="boundingScan" http="true" type="server" />
+    <export function="boundingScanResult" http="true" type="server" />
+    <export function="boundingGet" http="true" type="server" />
+    <export function="boundingGetResult" http="true" type="server" />
+    <export function="boundingFetch" http="true" type="server" />
+    <export function="boundingFetchResult" http="true" type="server" />
+    <export function="boundingDraw" http="true" type="server" />
+    <export function="boundingDrawResult" http="true" type="server" />
     <export function="clientAction" http="true" type="server" />
     <export function="clientActionResult" http="true" type="server" />
     <export function="reloadLocalClient" http="true" type="server" />

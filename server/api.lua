@@ -1017,3 +1017,75 @@ function clientActionResult(id)
     Agent.logHttp("clientActionResult", tostring(id))
     return Agent.getClientRequestResult(id)
 end
+
+---@param playerName string|nil
+---@param options table|nil
+---@return table
+function boundingScan(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("boundingScan", (playerName or "*") .. " action=" .. tostring(options.action or "start"))
+    return Agent.handleBoundingScan(playerName, options)
+end
+
+---@param id any
+---@return table
+function boundingScanResult(id)
+    Agent.logHttp("boundingScanResult", tostring(id))
+    return Agent.getBoundingScanResult(id)
+end
+
+---@param playerName string|nil
+---@param options table|nil
+---@return table
+function boundingGet(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("boundingGet", (playerName or "*") .. " model=" .. tostring(options.model or options.agentId or options.id or "*"))
+    return Agent.handleBoundingGet(playerName, options)
+end
+
+---@param id any
+---@return table
+function boundingGetResult(id)
+    Agent.logHttp("boundingGetResult", tostring(id))
+    return Agent.getBoundingGetResult(id)
+end
+
+---@param playerName string|nil
+---@param options table|nil
+---@return table
+function boundingFetch(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("boundingFetch", (playerName or "*") .. " model=" .. tostring(options.model or options.agentId or options.id or "*"))
+    return Agent.handleBoundingFetch(playerName, options)
+end
+
+---@param id any
+---@return table
+function boundingFetchResult(id)
+    Agent.logHttp("boundingFetchResult", tostring(id))
+    return Agent.getBoundingFetchResult(id)
+end
+
+---@param playerName string|nil
+---@param options table|nil
+---@return table
+function boundingDraw(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("boundingDraw", (playerName or "*") .. " action=" .. tostring(options.action or "start"))
+    return Agent.handleBoundingDraw(playerName, options)
+end
+
+---@param id any
+---@return table
+function boundingDrawResult(id)
+    Agent.logHttp("boundingDrawResult", tostring(id))
+    return Agent.getBoundingDrawResult(id)
+end

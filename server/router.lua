@@ -987,6 +987,120 @@ local function routeModelRestore(request)
     return Agent.okResponse(result)
 end
 
+---@param result table
+---@return AgentJsonResponse
+local function routeBoundingPayload(result)
+    if result.ok then
+        return Agent.okResponse(result)
+    end
+    if result.error == "Request not found" then
+        return Agent.errorResponse(result.error, 404)
+    end
+    if result.error == "notStreamedIn" or result.default or result.custom then
+        return Agent.jsonResponse(result, 409)
+    end
+    return Agent.errorResponse(result.error or "Bounding request failed", 400)
+end
+
+---@param request AgentHttpRequest
+---@return table
+local function boundingBody(request)
+    local body = {}
+    if request.body and request.body ~= "" then
+        local parsed, err = parseJsonBody(request.body)
+        if not parsed then
+            return nil, err
+        end
+        body = parsed
+    end
+    if request.query then
+        if request.query.player then body.player = request.query.player end
+        if request.query.serial then body.serial = request.query.serial end
+        if request.query.action then body.action = request.query.action end
+        if request.query.id then body.id = request.query.id end
+        if request.query.model then body.model = tonumber(request.query.model) or request.query.model end
+        if request.query.elementType then body.elementType = request.query.elementType end
+        if request.query.agentId then body.agentId = request.query.agentId end
+        if request.query.mtaHandle then body.mtaHandle = request.query.mtaHandle end
+        if request.query.force then body.force = request.query.force end
+        if request.query.nearby then body.nearby = request.query.nearby end
+        if request.query.batch then body.batch = tonumber(request.query.batch) end
+        if request.query.maxDistance then body.maxDistance = tonumber(request.query.maxDistance) end
+        if request.query.limit then body.limit = tonumber(request.query.limit) end
+    end
+    return body
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeBoundingScan(request)
+    local body, err = boundingBody(request)
+    if not body then
+        return Agent.errorResponse(err, 400)
+    end
+    return routeBoundingPayload(boundingScan(body.player, body))
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeBoundingScanResult(request)
+    local id = request.path:match("^/api/bounding/scan/([^/]+)$")
+    if not id or id == "" then
+        return Agent.errorResponse("Request id required", 400)
+    end
+    return routeBoundingPayload(boundingScanResult(id))
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeBoundingFetch(request)
+    local body, err = boundingBody(request)
+    if not body then
+        return Agent.errorResponse(err, 400)
+    end
+    return routeBoundingPayload(boundingFetch(body.player, body))
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeBoundingFetchResult(request)
+    local id = request.path:match("^/api/bounding/fetch/([^/]+)$")
+    if not id or id == "" then
+        return Agent.errorResponse("Request id required", 400)
+    end
+    return routeBoundingPayload(boundingFetchResult(id))
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeBoundingDraw(request)
+    local body, err = boundingBody(request)
+    if not body then
+        return Agent.errorResponse(err, 400)
+    end
+    return routeBoundingPayload(boundingDraw(body.player, body))
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeBoundingDrawResult(request)
+    local id = request.path:match("^/api/bounding/draw/([^/]+)$")
+    if not id or id == "" then
+        return Agent.errorResponse("Request id required", 400)
+    end
+    return routeBoundingPayload(boundingDrawResult(id))
+end
+
+---@param request AgentHttpRequest
+---@return AgentJsonResponse
+local function routeBoundingGet(request)
+    local body, err = boundingBody(request)
+    if not body then
+        return Agent.errorResponse(err, 400)
+    end
+    return routeBoundingPayload(boundingGet(body.player, body))
+end
+
 ---@param request AgentHttpRequest
 ---@return AgentJsonResponse|nil
 function httpRouter(request)
@@ -1147,6 +1261,34 @@ function httpRouter(request)
 
     if method == "POST" and path == "/api/models/restore" then
         return routeModelRestore(request)
+    end
+
+    if (method == "GET" or method == "POST") and path == "/api/bounding/scan" then
+        return routeBoundingScan(request)
+    end
+
+    if method == "GET" and path:match("^/api/bounding/scan/[^/]+$") then
+        return routeBoundingScanResult(request)
+    end
+
+    if (method == "GET" or method == "POST") and path == "/api/bounding/fetch" then
+        return routeBoundingFetch(request)
+    end
+
+    if method == "GET" and path:match("^/api/bounding/fetch/[^/]+$") then
+        return routeBoundingFetchResult(request)
+    end
+
+    if (method == "GET" or method == "POST") and path == "/api/bounding/draw" then
+        return routeBoundingDraw(request)
+    end
+
+    if method == "GET" and path:match("^/api/bounding/draw/[^/]+$") then
+        return routeBoundingDrawResult(request)
+    end
+
+    if (method == "GET" or method == "POST") and path == "/api/bounding" then
+        return routeBoundingGet(request)
     end
 
     if path:match("^/api/") then
