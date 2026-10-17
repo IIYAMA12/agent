@@ -52,4 +52,5 @@ When working with the MTA agent bridge:
 | Stock bounding boxes | `bounding.scan { action: "start" }` then `{ action: "status", id }` until `status` is `complete`. Does not overwrite stored defaults |
 | Live / modded bounding box | `bounding.fetch { agentId }` or `{ model, elementType }` — element must be streamed in; writes custom only, not defaults |
 | Draw bounding box | `bounding.draw { action: "start", agentId }` or `{ nearby: true }` — verify with `screen.capture` |
+| Where to look / distance | `indicate.set { kind: "look", x, y, z, label }` — virtual dxDraw only. Expires after `timeout` seconds (default 15); `timeout: 0` stays until `indicate.clear`. `indicate.list` returns meters |
 | Restart agent/middleware | `agent.restart` / `middleware.restart` (when ALLOW_RESTART=1) |

@@ -394,6 +394,23 @@ class MtaClient {
     );
   }
 
+  indicate(player, options = {}) {
+    return this.invoke("indicate", [player, options]);
+  }
+
+  indicateResult(id) {
+    return this.invoke("indicateResult", [id]);
+  }
+
+  indicateComplete(player, options = {}, pollOptions = {}) {
+    const { pollAsyncJob } = require("./lib/mta-async");
+    return pollAsyncJob(
+      () => this.indicate(player, options),
+      (id) => this.indicateResult(id),
+      { timeoutMs: 15000, intervalMs: 150, ...pollOptions }
+    );
+  }
+
   teleportToClosestAirport(player, options = {}) {
     return this.invoke("teleportToClosestAirport", [player, options]);
   }

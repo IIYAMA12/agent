@@ -229,8 +229,8 @@ Add to `mtaserver.conf`:
 Normal agent loop:
 
 1. **Discover** — `mta_health` / `GET /health` / `getServerState` (includes `playerDetails` with serials)
-2. **Inspect** — `look.target`, `nearby.closest`, `screen.capture`, `gui.scan`, `debug.list`, `debug.events`, `health.get`, `elements.list` / `elements.walk`, `bounding.get` / `bounding.draw`
-3. **Act** — `teleport.*`, `elements.track` / `elements.modify`, `eval.client` (client Lua)
+2. **Inspect** — `look.target`, `nearby.closest`, `screen.capture`, `gui.scan`, `debug.list`, `debug.events`, `health.get`, `elements.list` / `elements.walk`, `bounding.get` / `bounding.draw`, `indicate.list`
+3. **Act** — `teleport.*`, `elements.track` / `elements.modify`, `indicate.set` / `indicate.clear`, `eval.client` (client Lua)
 4. **Remember** — Node `POST /memory` for session context (`session.defaultPlayerSerial` for stable player identity)
 
 **After code changes:**
@@ -277,6 +277,7 @@ The **agent** MTA resource exposes an HTTP API on the game server so an AI agent
 - **Capture debug logs** from [`onDebugMessage`](https://wiki.multitheftauto.com/wiki/OnDebugMessage) / [`onClientDebugMessage`](https://wiki.multitheftauto.com/wiki/OnClientDebugMessage) (`debugLogList`, last 500, anti-dupe)
 - **Trace events** on demand (`debugEvents`: start, reproduce, list, stop)
 - **Read process health** — memory, CPU, network, client GPU (`healthGet`)
+- **Draw virtual look cues and distance markers** on the client (`indicate` / `indicate.set`, `indicate.list`). `dxDraw` only — no `createMarker` or other elements
 - Resolve players by **name or serial** (`resolvePlayer`, `AGENT_PLAYER_SERIAL`)
 - Read/write key-value memory (in-memory + SQLite on MTA and Node)
 - Query server state (players + serials, resources, map)
@@ -472,7 +473,7 @@ Base: `http://<host>:<httpport>/agent`
 
 Auth: `Authorization: Basic base64(user:pass)` or `curl -u user:pass`.
 
-**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `screenCapture`, `screenCaptureResult`, `debugLogList`, `debugLogResult`, `debugEvents`, `debugEventsResult`, `healthGet`, `healthResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`, `resourceRefresh`, `resourceSearch`, `boundingScan`, `boundingScanResult`, `boundingGet`, `boundingGetResult`, `boundingFetch`, `boundingFetchResult`, `boundingDraw`, `boundingDrawResult`
+**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `screenCapture`, `screenCaptureResult`, `debugLogList`, `debugLogResult`, `debugEvents`, `debugEventsResult`, `healthGet`, `healthResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`, `resourceRefresh`, `resourceSearch`, `boundingScan`, `boundingScanResult`, `boundingGet`, `boundingGetResult`, `boundingFetch`, `boundingFetchResult`, `boundingDraw`, `boundingDrawResult`, `indicate`, `indicateResult`
 
 **Router paths:**
 
@@ -655,6 +656,9 @@ curl -X POST http://127.0.0.1:3847/mta/features/look.target \
 | `bounding.get` | Lookup `{ default, custom, differsFromDefault }` by model or element |
 | `bounding.fetch` | Live custom read after a model mod. Does not write defaults. `notStreamedIn` if the element is not streamed in |
 | `bounding.draw` | In-game wireframe (editor half-center + `dxDrawLine3D`). Verify with `screen.capture` |
+| `indicate.set` | Virtual look cue or distance marker (`dxDraw` only, no `createMarker`). See [indications](#in-game-indications--virtual-look-cues-and-distance-markers) |
+| `indicate.clear` | Remove one virtual cue by `id`, or all with `all: true` |
+| `indicate.list` | Live distances, `onScreen`, and screen pixels for the cues currently drawn |
 | `eval.server` | Server Lua via loadstring (**middleware HTTP gate:** `ALLOW_HTTP_EVAL=1`) |
 | `eval.client` | Client Lua on a player (auto-polls; not gated by `ALLOW_HTTP_EVAL`) |
 | `agent.restart` / `middleware.restart` / `system.restart` | Restart services (`ALLOW_RESTART=1`) |
@@ -671,7 +675,7 @@ Add new features in `node/shared/features/*.js` via `registry.register(id, { des
 | `0` (default) | Blocks middleware `POST /mta/eval` and MCP `eval.server` / `mta_eval_server` |
 | `1` | Allows arbitrary **server-side** Lua via those middleware/MCP paths |
 
-**Not gated:** `eval.client`, typed features (`teleport.*`, `screen.capture`, `gui.scan`, `debug.list`, `elements.*`, `bounding.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
+**Not gated:** `eval.client`, typed features (`teleport.*`, `screen.capture`, `gui.scan`, `debug.list`, `elements.*`, `bounding.*`, `indicate.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
 
 ---
 
@@ -840,6 +844,54 @@ curl -X POST http://127.0.0.1:3847/mta/do \
 `bounding.draw` uses the live box when the element is streamed in, otherwise custom, then the stock default. `screen.capture` shows the overlay (dxDraw is included).
 
 MCP tools, after a middleware restart and an MCP reload: `mta_bounding_scan`, `mta_bounding_get`, `mta_bounding_fetch`, `mta_bounding_draw`. Until the reload, call `mta_run_feature` with the feature id.
+
+---
+
+### In-game indications — virtual look cues and distance markers
+
+Drawn on the client with `dxDrawLine3D`, `dxDrawLine`, and `dxDrawText`. No `createMarker`, blip, object, or other element is created. The player must be connected (reconnect after `restart agent`).
+
+`indicate.set` places a cue. `indicate.list` returns the distances drawn on screen, plus `onScreen` and screen pixels. `indicate.clear` removes them.
+
+```bash
+# Tell the player where to look (on-screen bracket, or an edge arrow when it is off screen)
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"indicate.set\",\"kind\":\"look\",\"x\":0,\"y\":0,\"z\":3,\"label\":\"Look here\"}"
+
+# Distance between two points. The label is the segment length.
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"indicate.set\",\"kind\":\"measure\",\"x\":0,\"y\":0,\"z\":3,\"toX\":10,\"toY\":0,\"toZ\":3}"
+
+# Read the meters without a screenshot
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"indicate.list\"}"
+```
+
+| Param | Default | Description |
+|---|---|---|
+| `kind` | `look` | `look` (where to face), `marker` (3D ring and post), `measure` (line between two points) |
+| `mode` | `both` for `look`, else `3d` | `2d`, `3d`, or `both`. Distance text is drawn whenever the point is on screen |
+| `x`, `y`, `z` | — | World position. Or `agentId` to follow a tracked element |
+| `toX`, `toY`, `toZ` | — | Measure end. Or `toAgentId` |
+| `label` | — | Short text drawn with the distance |
+| `color` | amber / green / blue by kind | `#RRGGBB` or `#RRGGBBAA` |
+| `size` | `0.6` (`0.45` for measure) | Ring radius in meters |
+| `showDistance` | `true` | Draw the meter label. `indicate.list` still returns `distance` |
+| `timeout` | `15` | Seconds until the cue drops itself. `0` keeps it until `indicate.clear`. Fire-and-forget |
+| `ttlMs` | — | Same lifetime in milliseconds. Wins over `timeout` when both are set. `0` keeps the cue |
+| `replace` | `false` | `true` removes existing cues before adding |
+| `items` | — | JSON array string of cues, for a batch. At most 32 are kept |
+| `id` | generated | Update or clear this cue |
+| `all` | — | `indicate.clear` only. `true` removes every cue |
+
+`distance` is meters from the player, or the segment length for `measure`. `playerDistance` is meters from the player to that point, or to the midpoint of a measure line. A cue that follows an element in another interior or dimension is listed with `sameWorld: false` and is not drawn.
+
+Direct MTA: `POST /agent/call/indicate` with `[player, options]`, then poll `indicateResult`.
+
+MCP tools, after a middleware restart and an MCP reload: `mta_indicate_set`, `mta_indicate_clear`, `mta_indicate_list`. Until the reload, call `mta_run_feature` with the feature id. `screen.capture` shows the overlay.
 
 ---
 

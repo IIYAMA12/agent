@@ -911,6 +911,24 @@ function healthResult(id)
     return Agent.getHealthFetchResult(id)
 end
 
+---@param playerName string|nil
+---@param options table|nil
+---@return table
+function indicate(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("indicate", (playerName or "*") .. " action=" .. tostring(options.action or "list"))
+    return Agent.handleIndicate(playerName, options)
+end
+
+---@param id any request id (expected string)
+---@return table
+function indicateResult(id)
+    Agent.logHttp("indicateResult", tostring(id))
+    return Agent.getClientRequestResult(id)
+end
+
 ---@param identifier string|nil player name or serial
 ---@param options AgentResolvePlayerOptions|nil
 ---@return table

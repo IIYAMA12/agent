@@ -85,6 +85,37 @@ curl.exe -s http://127.0.0.1:3847/mta/features
 
 Run features via `POST /mta/do` or `POST /mta/features/:id`. Full feature list and MCP setup: [AGENTS.md](AGENTS.md).
 
+## In-game indications
+
+Virtual look cues and distance markers, drawn on the client with `dxDraw`. Nothing is created in the world: no `createMarker`, blips, or other elements. A cue expires on its own after `timeout` seconds (default **15**), so a set can be fire-and-forget. `timeout: 0` or `ttlMs: 0` keeps it until `indicate.clear`.
+
+Two uses:
+
+- **Look cues** (`kind: "look"`, default) tell the player where to face. On screen, a bracket and label. Off screen, an arrow on the screen edge. A 3D ring is included when `mode` is `both` (the default for `look`) or `3d`.
+- **Distance markers** (`kind: "marker"` or `"measure"`) label meters in the world. `marker` is a 3D ring and post at `x, y, z` (or a tracked `agentId`). `measure` is a 3D line between two points; the label is the segment length. `indicate.list` returns those same distances, plus `onScreen` and screen pixels, so a caller can read the number as well as see it in `screen.capture`.
+
+| Feature | Role |
+|---|---|
+| `indicate.set` | Place or update one cue. Optional `items` JSON string places several. `replace: true` clears first. |
+| `indicate.clear` | Remove one `id`, or all with `all: true`. |
+| `indicate.list` | Live distances and screen positions. |
+
+```bash
+curl.exe -s -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"indicate.set\",\"kind\":\"look\",\"x\":0,\"y\":0,\"z\":3,\"label\":\"Look here\"}"
+
+curl.exe -s -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"indicate.set\",\"kind\":\"measure\",\"x\":0,\"y\":0,\"z\":3,\"toX\":10,\"toY\":0,\"toZ\":3}"
+
+curl.exe -s -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"indicate.list\"}"
+```
+
+Direct MTA: `POST /agent/call/indicate` with `[player, options]`, then poll `indicateResult`.
+
 ## Manual ACL
 
 If auto-install did not run, merge [acl/agent-acl-snippet.xml](acl/agent-acl-snippet.xml) into `acl.xml` and replace `your_http_user` with your `MTA_USER`.

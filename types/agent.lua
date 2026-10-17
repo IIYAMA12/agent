@@ -786,3 +786,80 @@ restartResource = nil
 ---@class AgentClientRequestOpts
 ---@field timeoutMs? integer
 ---@field onComplete? fun(request: AgentAsyncRequest, clientReturn: any)
+
+--------------------------------------------------------------------------------
+-- Virtual indications (client dxDraw only — no createMarker)
+--------------------------------------------------------------------------------
+
+---@class AgentIndicateColor
+---@field r integer
+---@field g integer
+---@field b integer
+---@field a integer
+
+---@class AgentIndicatePoint
+---@field x number
+---@field y number
+---@field z number
+
+---@class AgentIndicateScreen
+---@field x integer
+---@field y integer
+
+---@class AgentIndicateItem
+---@field id string
+---@field kind "look"|"marker"|"measure"
+---@field mode "2d"|"3d"|"both"
+---@field label? string
+---@field size number
+---@field showDistance boolean
+---@field color AgentIndicateColor
+---@field position? AgentIndicatePoint
+---@field positionError? string
+---@field to? AgentIndicatePoint
+---@field toError? string
+---@field stale? boolean
+---@field sameWorld boolean
+---@field distance? number segment length for measure, otherwise meters from the player
+---@field playerDistance? number
+---@field onScreen boolean
+---@field screen? AgentIndicateScreen
+---@field ttlMs? integer remaining lifetime when the cue expires on its own
+
+---@class AgentIndicateRejected
+---@field index integer
+---@field error string
+
+---@class AgentIndicateSnapshot
+---@field count integer
+---@field items AgentIndicateItem[]
+---@field cleared? integer
+---@field id? string
+---@field rejected? AgentIndicateRejected[]
+---@field dropped? string[]
+
+---@class AgentIndicateOptions
+---@field action? "set"|"clear"|"list"
+---@field id? string
+---@field all? boolean
+---@field kind? "look"|"marker"|"measure"
+---@field mode? "2d"|"3d"|"both"
+---@field x? number
+---@field y? number
+---@field z? number
+---@field agentId? string
+---@field toX? number
+---@field toY? number
+---@field toZ? number
+---@field toAgentId? string
+---@field label? string
+---@field color? string|AgentIndicateColor
+---@field size? number
+---@field showDistance? boolean
+---@field timeout? number seconds; 0 keeps the cue until indicate.clear. Default 15
+---@field ttlMs? integer milliseconds; wins over timeout. 0 keeps the cue until indicate.clear
+---@field replace? boolean
+---@field items? string|table
+---@field player? string
+---@field serial? string
+---@field timeoutMs? integer

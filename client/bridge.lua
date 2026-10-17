@@ -4,7 +4,7 @@ local REQUEST_EVENT = "agent:clientRequest"
 local RESPONSE_EVENT = "agent:clientResponse"
 local READY_EVENT = "agent:clientReady"
 
----@param action string one of the `element*`/`guiScan`/`debugLogSnapshot`/`debugEventHook`/`healthSnapshot` actions
+---@param action string one of the `element*`/`guiScan`/`debugLogSnapshot`/`debugEventHook`/`healthSnapshot`/`indicate` actions
 ---@param payload table|nil action-specific payload (e.g. AgentTrackElementOpts, AgentGetElementOptions, AgentElementFilters, AgentElementModifyOps, AgentWalkOptions, AgentGuiScanOptions, AgentDebugLogOptions, AgentEventHookControlOptions, AgentHealthOptions)
 ---@return AgentHttpPayload|nil response `nil` when `action` is not an element-related action
 local function dispatchElementAction(action, payload)
@@ -114,6 +114,13 @@ local function dispatchElementAction(action, payload)
             return { ok = false, error = "Health snapshot unavailable on client" }
         end
         return { ok = true, result = Agent.getClientHealthSnapshot(payload) }
+    end
+
+    if action == "indicate" then
+        if type(Agent.handleClientIndicate) ~= "function" then
+            return { ok = false, error = "Indications unavailable on client" }
+        end
+        return Agent.handleClientIndicate(payload)
     end
 
     if action == "modelReplace" then
