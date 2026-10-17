@@ -27,6 +27,7 @@
     <script src="client/bounding.lua" type="client" />
     <script src="local/client/**/*.lua" type="client" cache="false" />
     <script src="client/indicate.lua" type="client" />
+    <script src="client/camera.lua" type="client" />
     <script src="client/bridge.lua" type="client" />
     <script src="server/check-resource-rights_s.lua" type="server" />
     <script src="server/main.lua" type="server" />
@@ -45,6 +46,7 @@
     <script src="server/model_replace.lua" type="server" />
     <script src="server/bounding.lua" type="server" />
     <script src="server/indicate.lua" type="server" />
+    <script src="server/camera.lua" type="server" />
     <script src="server/api.lua" type="server" />
     <script src="server/installation_s.lua" type="server" />
 
@@ -109,6 +111,14 @@
     <export function="boundingDrawResult" http="true" type="server" />
     <export function="indicate" http="true" type="server" />
     <export function="indicateResult" http="true" type="server" />
+    <export function="cameraFade" http="true" type="server" />
+    <export function="cameraGetInterior" http="true" type="server" />
+    <export function="cameraSetInterior" http="true" type="server" />
+    <export function="cameraGetMatrix" http="true" type="server" />
+    <export function="cameraGetMatrixResult" http="true" type="server" />
+    <export function="cameraSetMatrix" http="true" type="server" />
+    <export function="cameraGetTarget" http="true" type="server" />
+    <export function="cameraSetTarget" http="true" type="server" />
     <export function="clientAction" http="true" type="server" />
     <export function="clientActionResult" http="true" type="server" />
     <export function="reloadLocalClient" http="true" type="server" />

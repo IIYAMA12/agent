@@ -863,3 +863,62 @@ restartResource = nil
 ---@field player? string
 ---@field serial? string
 ---@field timeoutMs? integer
+
+--------------------------------------------------------------------------------
+-- Camera
+--------------------------------------------------------------------------------
+
+---@class AgentCameraFadeOptions : AgentResolvePlayerOptions
+---@field fadeIn boolean true fades the view back in; false fades out to a color
+---@field time? number seconds, default 1
+---@field red? integer fade-out color 0-255
+---@field green? integer fade-out color 0-255
+---@field blue? integer fade-out color 0-255
+
+---@class AgentCameraFadeResult
+---@field player AgentPlayerInfo
+---@field fadeIn boolean
+---@field time number
+---@field red integer
+---@field green integer
+---@field blue integer
+
+---@class AgentCameraInteriorOptions : AgentResolvePlayerOptions
+---@field interior integer 0-255
+
+---@class AgentCameraInteriorResult
+---@field player AgentPlayerInfo
+---@field interior integer
+
+---@class AgentCameraMatrixOptions : AgentResolvePlayerOptions
+---@field x number
+---@field y number
+---@field z number
+---@field lookAtX? number
+---@field lookAtY? number
+---@field lookAtZ? number
+---@field roll? number -180 to 180, default 0
+---@field fov? number 0.01 to 180, default 70
+---@field interior? integer also calls setCameraInterior when set
+
+---@class AgentCameraMatrixResult
+---@field player? AgentPlayerInfo
+---@field source? "client"
+---@field position AgentVec3
+---@field lookAt AgentVec3
+---@field lookAtDefault? boolean true when look-at was filled as one meter north
+---@field roll number
+---@field fov number
+---@field interior? integer
+
+---@class AgentCameraTargetOptions : AgentResolvePlayerOptions
+---@field reset? boolean follow the player again
+---@field agentId? string server registry id s-<startup>-<seq>
+---@field target? string player name, serial, or agent id
+---@field targetPlayer? string player name or serial
+
+---@class AgentCameraTargetResult
+---@field player AgentPlayerInfo
+---@field fixed boolean true when the camera is detached (setCameraMatrix)
+---@field reset? boolean
+---@field target? AgentNearbyBaseProps

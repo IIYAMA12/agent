@@ -123,6 +123,17 @@ local function dispatchElementAction(action, payload)
         return Agent.handleClientIndicate(payload)
     end
 
+    if action == "cameraMatrix" then
+        if type(Agent.getClientCameraMatrix) ~= "function" then
+            return { ok = false, error = "Camera matrix unavailable on client" }
+        end
+        local matrix, err = Agent.getClientCameraMatrix()
+        if not matrix then
+            return { ok = false, error = err or "getCameraMatrix failed" }
+        end
+        return { ok = true, result = matrix }
+    end
+
     if action == "modelReplace" then
         if type(Agent.applyModelReplace) ~= "function" then
             return { ok = false, error = "Model replace unavailable on client" }

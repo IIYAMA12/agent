@@ -1107,3 +1107,84 @@ function boundingDrawResult(id)
     Agent.logHttp("boundingDrawResult", tostring(id))
     return Agent.getBoundingDrawResult(id)
 end
+
+---@param exportName string
+---@param playerName string|nil
+---@param options table|nil
+---@param method fun(playerName: string|nil, options: table): boolean, any
+---@return table
+local function cameraExport(exportName, playerName, options, method)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp(exportName, playerName or "*")
+    local success, result = method(playerName, options)
+    if not success then
+        return { ok = false, error = result }
+    end
+    return { ok = true, result = result }
+end
+
+---@param playerName string|nil
+---@param options AgentCameraFadeOptions|nil
+---@return table
+function cameraFade(playerName, options)
+    return cameraExport("cameraFade", playerName, options, Agent.cameraFade)
+end
+
+---@param playerName string|nil
+---@param options AgentResolvePlayerOptions|nil
+---@return table
+function cameraGetInterior(playerName, options)
+    return cameraExport("cameraGetInterior", playerName, options, Agent.cameraGetInterior)
+end
+
+---@param playerName string|nil
+---@param options AgentCameraInteriorOptions|nil
+---@return table
+function cameraSetInterior(playerName, options)
+    return cameraExport("cameraSetInterior", playerName, options, Agent.cameraSetInterior)
+end
+
+---@param playerName string|nil
+---@param options AgentResolvePlayerOptions|nil
+---@return table
+function cameraGetMatrix(playerName, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    Agent.logHttp("cameraGetMatrix", playerName or "*")
+    local id, err = Agent.startCameraMatrixFetch(playerName, options)
+    if not id then
+        return { ok = false, error = err }
+    end
+    return { ok = true, id = id, status = "pending" }
+end
+
+---@param id any request id (expected string)
+---@return table
+function cameraGetMatrixResult(id)
+    Agent.logHttp("cameraGetMatrixResult", tostring(id))
+    return Agent.getClientRequestResult(id)
+end
+
+---@param playerName string|nil
+---@param options AgentCameraMatrixOptions|nil
+---@return table
+function cameraSetMatrix(playerName, options)
+    return cameraExport("cameraSetMatrix", playerName, options, Agent.cameraSetMatrix)
+end
+
+---@param playerName string|nil
+---@param options AgentResolvePlayerOptions|nil
+---@return table
+function cameraGetTarget(playerName, options)
+    return cameraExport("cameraGetTarget", playerName, options, Agent.cameraGetTarget)
+end
+
+---@param playerName string|nil
+---@param options AgentCameraTargetOptions|nil
+---@return table
+function cameraSetTarget(playerName, options)
+    return cameraExport("cameraSetTarget", playerName, options, Agent.cameraSetTarget)
+end

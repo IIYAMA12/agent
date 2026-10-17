@@ -230,7 +230,7 @@ Normal agent loop:
 
 1. **Discover** — `mta_health` / `GET /health` / `getServerState` (includes `playerDetails` with serials)
 2. **Inspect** — `look.target`, `nearby.closest`, `screen.capture`, `gui.scan`, `debug.list`, `debug.events`, `health.get`, `elements.list` / `elements.walk`, `bounding.get` / `bounding.draw`, `indicate.list`
-3. **Act** — `teleport.*`, `elements.track` / `elements.modify`, `indicate.set` / `indicate.clear`, `eval.client` (client Lua)
+3. **Act** — `teleport.*`, `camera.*`, `elements.track` / `elements.modify`, `indicate.set` / `indicate.clear`, `eval.client` (client Lua)
 4. **Remember** — Node `POST /memory` for session context (`session.defaultPlayerSerial` for stable player identity)
 
 **After code changes:**
@@ -277,6 +277,7 @@ The **agent** MTA resource exposes an HTTP API on the game server so an AI agent
 - **Capture debug logs** from [`onDebugMessage`](https://wiki.multitheftauto.com/wiki/OnDebugMessage) / [`onClientDebugMessage`](https://wiki.multitheftauto.com/wiki/OnClientDebugMessage) (`debugLogList`, last 500, anti-dupe)
 - **Trace events** on demand (`debugEvents`: start, reproduce, list, stop)
 - **Read process health** — memory, CPU, network, client GPU (`healthGet`)
+- **Move the player camera** — fade, interior, matrix, and follow target (`cameraFade`, `cameraGetMatrix`, `cameraSetMatrix`, `cameraSetTarget`, …)
 - **Draw virtual look cues and distance markers** on the client (`indicate` / `indicate.set`, `indicate.list`). `dxDraw` only — no `createMarker` or other elements
 - Resolve players by **name or serial** (`resolvePlayer`, `AGENT_PLAYER_SERIAL`)
 - Read/write key-value memory (in-memory + SQLite on MTA and Node)
@@ -473,7 +474,7 @@ Base: `http://<host>:<httpport>/agent`
 
 Auth: `Authorization: Basic base64(user:pass)` or `curl -u user:pass`.
 
-**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `screenCapture`, `screenCaptureResult`, `debugLogList`, `debugLogResult`, `debugEvents`, `debugEventsResult`, `healthGet`, `healthResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`, `resourceRefresh`, `resourceSearch`, `boundingScan`, `boundingScanResult`, `boundingGet`, `boundingGetResult`, `boundingFetch`, `boundingFetchResult`, `boundingDraw`, `boundingDrawResult`, `indicate`, `indicateResult`
+**Exports:** `ping`, `eval`, `evalClient`, `evalClientResult`, `findNearby`, `findVisible`, `findVisibleResult`, `findLookTarget`, `findLookTargetResult`, `teleportToClosestAirport`, `getAreaMap`, `listAreas`, `findClosestArea`, `teleportToArea`, `teleportToElement`, `teleportToPlayer`, `elementTrack`, `elementGet`, `elementList`, `elementRelease`, `elementModify`, `elementResolve`, `elementWalk`, `guiScan`, `guiScanResult`, `screenCapture`, `screenCaptureResult`, `debugLogList`, `debugLogResult`, `debugEvents`, `debugEventsResult`, `healthGet`, `healthResult`, `resolvePlayer`, `memoryGet`, `memorySet`, `memoryDelete`, `memoryList`, `callExport`, `getServerState`, `resourceStart`, `resourceStop`, `resourceRestart`, `resourceRefresh`, `resourceSearch`, `boundingScan`, `boundingScanResult`, `boundingGet`, `boundingGetResult`, `boundingFetch`, `boundingFetchResult`, `boundingDraw`, `boundingDrawResult`, `indicate`, `indicateResult`, `cameraFade`, `cameraGetInterior`, `cameraSetInterior`, `cameraGetMatrix`, `cameraGetMatrixResult`, `cameraSetMatrix`, `cameraGetTarget`, `cameraSetTarget`
 
 **Router paths:**
 
@@ -659,6 +660,10 @@ curl -X POST http://127.0.0.1:3847/mta/features/look.target \
 | `indicate.set` | Virtual look cue or distance marker (`dxDraw` only, no `createMarker`). See [indications](#in-game-indications--virtual-look-cues-and-distance-markers) |
 | `indicate.clear` | Remove one virtual cue by `id`, or all with `all: true` |
 | `indicate.list` | Live distances, `onScreen`, and screen pixels for the cues currently drawn |
+| `camera.fade` | Fade the view in or out (`fadeCamera`). Server fades must alternate. See [camera](#camera--fade-interior-matrix-target) |
+| `camera.interior.get` / `camera.interior.set` | Camera render interior (`getCameraInterior` / `setCameraInterior`) |
+| `camera.matrix.get` / `camera.matrix.set` | Live client matrix (`getCameraMatrix`; the server copy is only synced every few seconds). `set` detaches the camera until `camera.target.set` |
+| `camera.target.get` / `camera.target.set` | Who the camera follows. Omit the target or pass `reset: true` to follow the player again |
 | `eval.server` | Server Lua via loadstring (**middleware HTTP gate:** `ALLOW_HTTP_EVAL=1`) |
 | `eval.client` | Client Lua on a player (auto-polls; not gated by `ALLOW_HTTP_EVAL`) |
 | `agent.restart` / `middleware.restart` / `system.restart` | Restart services (`ALLOW_RESTART=1`) |
@@ -675,7 +680,7 @@ Add new features in `node/shared/features/*.js` via `registry.register(id, { des
 | `0` (default) | Blocks middleware `POST /mta/eval` and MCP `eval.server` / `mta_eval_server` |
 | `1` | Allows arbitrary **server-side** Lua via those middleware/MCP paths |
 
-**Not gated:** `eval.client`, typed features (`teleport.*`, `screen.capture`, `gui.scan`, `debug.list`, `elements.*`, `bounding.*`, `indicate.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
+**Not gated:** `eval.client`, typed features (`teleport.*`, `screen.capture`, `gui.scan`, `debug.list`, `elements.*`, `bounding.*`, `indicate.*`, `camera.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
 
 ---
 
@@ -1010,6 +1015,34 @@ curl -X POST http://127.0.0.1:3847/mta/do \
 A cached view of the same server stats is at `http://127.0.0.1:3847/dashboard` and `GET /api/status` (MCP resource `mta://server/status`).
 
 MCP: `mta_health_get`.
+
+---
+
+### Camera — fade, interior, matrix, target
+
+Server-side player camera, except `camera.matrix.get`, which reads [`getCameraMatrix`](https://wiki.multitheftauto.com/wiki/GetCameraMatrix) on the client. The server copy is only synced every few seconds. [`setCameraMatrix`](https://wiki.multitheftauto.com/wiki/SetCameraMatrix) detaches the camera from the player. [`setCameraTarget`](https://wiki.multitheftauto.com/wiki/SetCameraTarget) with no target, or `reset: true`, follows the player again. [`fadeCamera`](https://wiki.multitheftauto.com/wiki/FadeCamera) on the server must alternate: fade out, then fade in.
+
+```bash
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"camera.matrix.set\",\"x\":0,\"y\":0,\"z\":10,\"lookAtX\":0,\"lookAtY\":1,\"lookAtZ\":3}"
+```
+
+| Feature | Params |
+|---|---|
+| `camera.fade` | `fadeIn` (required). Optional `time` (seconds, default 1), `red`, `green`, `blue` (fade-out color, 0–255) |
+| `camera.interior.get` | — |
+| `camera.interior.set` | `interior` (0–255) |
+| `camera.matrix.get` | Live client read (auto-polls). Returns `position`, `lookAt`, `roll`, `fov`. The server copy of `getCameraMatrix` is only synced every few seconds |
+| `camera.matrix.set` | `x`, `y`, `z` required. Optional `lookAtX`, `lookAtY`, `lookAtZ` (all three, or the camera looks one meter north), `roll` (default 0, −180 to 180), `fov` (default 70, 0.01 to 180), `interior` |
+| `camera.target.get` | `fixed: true` when the camera is detached |
+| `camera.target.set` | `agentId`, `target`, or `targetPlayer`. Target must be a player, ped, or vehicle. No target, or `reset: true`, restores the follow camera |
+
+`player` / `serial` are optional on every call.
+
+Direct MTA: `POST /agent/call/cameraSetMatrix` (also `cameraFade`, `cameraGetInterior`, `cameraSetInterior`, `cameraGetTarget`, `cameraSetTarget`) with `[player, options]`. `cameraGetMatrix` returns `{ id, status: "pending" }`; poll `cameraGetMatrixResult`.
+
+MCP tools, after a middleware restart and an MCP reload: `mta_camera_fade`, `mta_camera_interior_get`, `mta_camera_interior_set`, `mta_camera_matrix_get`, `mta_camera_matrix_set`, `mta_camera_target_get`, `mta_camera_target_set`. Until the reload, call `mta_run_feature` with the feature id.
 
 ---
 

@@ -15,6 +15,7 @@ const { registerResourceFeatures } = require("./resources");
 const { registerModelFeatures } = require("./models");
 const { registerBoundingFeatures } = require("./bounding");
 const { registerIndicateFeatures } = require("./indicate");
+const { registerCameraFeatures } = require("./camera");
 
 const registry = new FeatureRegistry();
 const localFeatureIds = new Set();
@@ -35,6 +36,7 @@ registerResourceFeatures(registry);
 registerModelFeatures(registry);
 registerBoundingFeatures(registry);
 registerIndicateFeatures(registry);
+registerCameraFeatures(registry);
 {
   const initial = loadLocalFeatures(registry);
   if (initial.errors.length) {
