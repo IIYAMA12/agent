@@ -1,0 +1,1 @@
+---@alias addEventHandler_onClientRender fun(eventName: "onClientRender", attachedTo: element, handlerFunction: fun()): boolean

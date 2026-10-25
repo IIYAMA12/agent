@@ -30,6 +30,7 @@ When working with the MTA agent bridge:
    - **Live status (cached):** open `http://127.0.0.1:3847/dashboard` in a browser or Cursor Simple Browser; JSON at `GET /api/status`. MCP resource `mta://server/status` for agents (refreshed every ~8s by middleware).
    - **Resources:** use `resources.search` to find resource names/states (do not dump all 300 via `getServerState`). Then `resources.control` with `action: start|stop|restart|refresh` (`refreshAll: true` + optional `resource` to pick up file changes via `refreshResources`).
    - **Player identity:** prefer `serial` or `AGENT_PLAYER_SERIAL` over name — names can change or collide; serial is stable per client install.
+   - **MTA function syntax:** `api.lookup` before writing or running Lua. `name` is required; `side` is optional. Look up events by event name (`onClientRender`). No player. The call reads the local index. `api.sync` fetches the annotations repo and rebuilds only when the git commit changed (`force: true` rebuilds anyway). A lookup fetches only when `node/data/mta-api.db` is missing.
    - If `ALLOW_RESTART=0`, ask the user before restarting MTA resources or middleware.
 
 ## Agent shortcuts (prefer these over raw eval/HTTP)
@@ -55,3 +56,4 @@ When working with the MTA agent bridge:
 | Where to look / distance | `indicate.set { kind: "look", x, y, z, label }` — virtual dxDraw only. Expires after `timeout` seconds (default 15); `timeout: 0` stays until `indicate.clear`. `indicate.list` returns meters |
 | Player camera | `camera.matrix.get` reads the live client matrix (the server copy syncs every few seconds). `camera.matrix.set { x, y, z, lookAtX, lookAtY, lookAtZ }` — `camera.target.set { reset: true }` follows the player again. `camera.fade { fadeIn }` alternates out, then in |
 | Restart agent/middleware | `agent.restart` / `middleware.restart` (when ALLOW_RESTART=1) |
+| MTA function syntax | Before writing or running Lua: `api.lookup { name: "setElementPosition", side: "server" }`. Events by name (`onClientRender`). No player. Reads the local index. `api.sync` fetches and rebuilds only when the commit changed; `force: true` rebuilds anyway. A lookup fetches only when `node/data/mta-api.db` is missing |

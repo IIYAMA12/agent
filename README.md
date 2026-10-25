@@ -1,13 +1,13 @@
 # MTA Agent Bridge
 
-HTTP bridge resource for AI agents to interact with an MTA:SA server. Supports named HTTP exports, a REST router, `loadstring` eval, and layered memory (in-memory + SQLite). Includes a Node.js middleware for local proxying and session memory.
+HTTP bridge resource for AI agents to interact with an MTA:SA server. Supports named HTTP exports, a REST router, `loadstring` eval, and layered memory (in-memory + SQLite). Includes a Node.js middleware for local proxying, session memory, and a local MTA function and event signature index.
 
 > **AI agents:** read [AGENTS.md](AGENTS.md) first for installation steps, troubleshooting, and how to connect to this resource.
 
 ## Requirements
 
 - MTA:SA **1.6.0+** (router support)
-- Node.js **18+** (for middleware only)
+- Node.js **22+** (for middleware only)
 
 ## Setup
 
@@ -84,6 +84,25 @@ curl.exe -s http://127.0.0.1:3847/mta/features
 ```
 
 Run features via `POST /mta/do` or `POST /mta/features/:id`. Full feature list and MCP setup: [AGENTS.md](AGENTS.md).
+
+## MTA API lookup
+
+Local signatures for MTA functions and events, indexed from the annotations repo into `node/data/mta-api.db`. A lookup needs no player and reads that file on this machine. Ask for a name, and the agent calls `api.lookup`. Use it before writing or running Lua, when choosing client or server, and when you want the argument list.
+
+| Feature | Role |
+|---|---|
+| `api.lookup` | Signature for `name`. Optional `side`: `client`, `server`, or `shared`. A client or server filter also returns shared overloads. |
+| `api.sync` | Fetch the annotations repo. Rebuilds the index when the git commit changed. `force: true` rebuilds anyway. |
+
+A lookup reads the database already on disk. It fetches from GitLab only when that file is missing. Later refreshes are an explicit `api.sync`. Events are stored by event name (`onClientRender`), so look those up directly.
+
+```bash
+curl.exe -s -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"api.lookup\",\"name\":\"getElementPosition\"}"
+```
+
+Details, including side filters and the MCP tool names: [MTA API lookup](AGENTS.md#mta-api-lookup--function-and-event-signatures-apilookup).
 
 ## In-game indications
 

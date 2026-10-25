@@ -9,6 +9,9 @@ models/*
 !models/import/
 !models/import/.gitkeep
 captures/
+node/data/mta-annotations/
+node/data/mta-api.db
+node/data/mta-api.db.tmp
 data/bounding-defaults.json
 data/bounding-defaults.json.tmp
 data/bounding-custom.json

@@ -15,7 +15,7 @@ Use this checklist interactively. Say what step you are on, what the user must d
 | Requirement | How to check |
 |---|---|
 | MTA:SA dedicated server **1.6.0+** | `meta.xml` → `<min_mta_version>` |
-| Node.js **18+** (for middleware/MCP) | `node --version` |
+| Node.js **22+** (for middleware/MCP) | `node --version` |
 | Resource at `<deathmatch>/resources/agent/` | Folder contains `meta.xml`, `server/` |
 | MTA server process **running** | HTTP port responds (default **22005**) |
 
@@ -230,7 +230,7 @@ Normal agent loop:
 
 1. **Discover** — `mta_health` / `GET /health` / `getServerState` (includes `playerDetails` with serials)
 2. **Inspect** — `look.target`, `nearby.closest`, `screen.capture`, `gui.scan`, `debug.list`, `debug.events`, `health.get`, `elements.list` / `elements.walk`, `bounding.get` / `bounding.draw`, `indicate.list`
-3. **Act** — `teleport.*`, `camera.*`, `elements.track` / `elements.modify`, `indicate.set` / `indicate.clear`, `eval.client` (client Lua)
+3. **Act** — `api.lookup` for the MTA signature before writing Lua, then `teleport.*`, `camera.*`, `elements.track` / `elements.modify`, `indicate.set` / `indicate.clear`, `eval.client` (client Lua)
 4. **Remember** — Node `POST /memory` for session context (`session.defaultPlayerSerial` for stable player identity)
 
 **After code changes:**
@@ -285,7 +285,7 @@ The **agent** MTA resource exposes an HTTP API on the game server so an AI agent
 - **Search / start / stop / restart / refresh** other MTA resources (`resourceSearch`, `resourceStart`, … / [`refreshResources`](https://wiki.multitheftauto.com/wiki/RefreshResources))
 - Proxy calls to other MTA resource exports
 
-Optional **Node middleware** (`node/`) proxies MTA HTTP when the agent cannot reach port 22005 directly, and provides a separate local memory store.
+Optional **Node middleware** (`node/`) proxies MTA HTTP when the agent cannot reach port 22005 directly, provides a separate local memory store, and keeps a local MTA function and event signature index (`api.lookup`).
 
 ```
 Agent (you) ──HTTP──► MTA :22005/agent     (direct, preferred)
@@ -307,7 +307,7 @@ Ask or infer the following. Do not assume paths or credentials from a different 
 | HTTP port | `mtaserver.conf` → `<httpport>` (default **22005**) |
 | HTTP credentials | `node/.env` (if middleware set up), or user-provided; see [Credentials](#credentials) |
 | MTA version | Must be **1.6.0+** (router export) |
-| Node.js | **18+** if using middleware |
+| Node.js | **22+** if using middleware |
 
 Check whether the MTA server process is actually running before debugging HTTP failures.
 
@@ -668,6 +668,8 @@ curl -X POST http://127.0.0.1:3847/mta/features/look.target \
 | `eval.client` | Client Lua on a player (auto-polls; not gated by `ALLOW_HTTP_EVAL`) |
 | `agent.restart` / `middleware.restart` / `system.restart` | Restart services (`ALLOW_RESTART=1`) |
 | `system.status` | Middleware listen status + restart policy |
+| `api.sync` | Fetch the annotations repo. Rebuilds the signature index when the commit changed. `force: true` rebuilds anyway. See [MTA API lookup](#mta-api-lookup--function-and-event-signatures-apilookup) |
+| `api.lookup` | MTA function or event signature. `name` required. `side`: `client`, `server`, or `shared` (a client or server filter also returns shared overloads). Fetches from GitLab only when the index file is missing. See [MTA API lookup](#mta-api-lookup--function-and-event-signatures-apilookup) |
 
 Add new features in `node/shared/features/*.js` via `registry.register(id, { description, params, run })`. Gitignored `node/local/features/*.js` modules that export `register(registry)` are loaded after the built-in features. Gitignored `node/local/models/*.js` modules can claim extra generate shapes. Client scripts in `local/client/` are loaded with a `meta.xml` glob (`cache="false"`) and may register `Agent.clientActions`.
 
@@ -680,7 +682,7 @@ Add new features in `node/shared/features/*.js` via `registry.register(id, { des
 | `0` (default) | Blocks middleware `POST /mta/eval` and MCP `eval.server` / `mta_eval_server` |
 | `1` | Allows arbitrary **server-side** Lua via those middleware/MCP paths |
 
-**Not gated:** `eval.client`, typed features (`teleport.*`, `screen.capture`, `gui.scan`, `debug.list`, `elements.*`, `bounding.*`, `indicate.*`, `camera.*`, `resources.*`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
+**Not gated:** `eval.client`, typed features (`teleport.*`, `screen.capture`, `gui.scan`, `debug.list`, `elements.*`, `bounding.*`, `indicate.*`, `camera.*`, `resources.*`, `api.lookup`, `api.sync`, …). Direct MTA HTTP `POST /agent/call/eval` still works if the caller has MTA credentials — use typed features instead of raw server eval when possible.
 
 ---
 
@@ -1043,6 +1045,46 @@ curl -X POST http://127.0.0.1:3847/mta/do \
 Direct MTA: `POST /agent/call/cameraSetMatrix` (also `cameraFade`, `cameraGetInterior`, `cameraSetInterior`, `cameraGetTarget`, `cameraSetTarget`) with `[player, options]`. `cameraGetMatrix` returns `{ id, status: "pending" }`; poll `cameraGetMatrixResult`.
 
 MCP tools, after a middleware restart and an MCP reload: `mta_camera_fade`, `mta_camera_interior_get`, `mta_camera_interior_set`, `mta_camera_matrix_get`, `mta_camera_matrix_set`, `mta_camera_target_get`, `mta_camera_target_set`. Until the reload, call `mta_run_feature` with the feature id.
+
+---
+
+### MTA API lookup — function and event signatures (`api.lookup`)
+
+Local signature index for MTA functions and events. Use it before writing or editing Lua, before `eval.client` or `eval.server`, when choosing client or server, and when the user asks what a function or event takes. The lookup returns the signature. Running that Lua is a separate step.
+
+No player is required. A lookup reads `node/data/mta-api.db` on this machine.
+
+The index is built from a shallow clone of [mta-annotations-for-lua-language-server](https://gitlab.com/IIYAMA12/mta-annotations-for-lua-language-server) (`main`) at `node/data/mta-annotations/`. Both that clone and `node/data/mta-api.db` are gitignored.
+
+GitLab is contacted in two cases:
+
+- `api.sync` always fetches `main` and hard-resets the clone. It rebuilds the SQLite index when the commit differs from the one stored in the database, or when the database is missing. `force: true` rebuilds when the commit is unchanged.
+- `api.lookup` runs that same sync only when `node/data/mta-api.db` is missing. Later lookups stay on the local file until the next `api.sync`.
+
+There is no timer and no refresh on middleware startup.
+
+Look up an event by its name (`onClientRender`, `onPlayerJoin`). The `addEventHandler` entry is one unexpanded union, and a lookup of that name includes `eventCount` for the selected side.
+
+```bash
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"api.lookup\",\"name\":\"getElementPosition\",\"side\":\"server\"}"
+
+curl -X POST http://127.0.0.1:3847/mta/do \
+  -H "Content-Type: application/json" \
+  -d "{\"feature\":\"api.sync\",\"force\":true}"
+```
+
+| Param | Feature | Description |
+|---|---|---|
+| `name` | lookup | Required. Case-insensitive. An exact name on a side with no overload returns `exact: true` and an empty `matches` list |
+| `side` | lookup | `client`, `server`, or `shared`. `client` and `server` also return shared overloads. `shared` returns shared overloads only. Omit it for every side |
+| `limit` | lookup | Cap for a partial name (`exact: false`, prefix matches first). Default 20, maximum 100 |
+| `force` | sync | Rebuild even when the stored commit matches |
+
+Each match includes `kind` (`function` or `event`), `side`, `file`, `line`, `wiki`, `deprecated`, `description`, and `overloads`. An overload has `side`, `label`, `params` (`name`, `type`, `optional`), `returns`, and `signature`.
+
+MCP tools, after a middleware restart and an MCP reload: `mta_api_lookup`, `mta_api_sync`. Until the reload, call `mta_run_feature` with the feature id.
 
 ---
 
@@ -1432,7 +1474,7 @@ Once verified, use this loop to help the user:
 
 1. **Discover** — `getServerState` or `GET /api/state` for players, resources, map
 2. **Inspect** — `findNearby` for closest elements; `findLookTarget` for camera view; `findVisible` for all on-screen elements; `screen.capture` for a JPEG of the player view; `eval` for custom Lua
-3. **Act** — `eval` or `callExport` to invoke existing resource APIs (prefer exports over raw eval when possible)
+3. **Act** — `api.lookup` for the MTA signature before writing Lua, then `eval` or `callExport` to invoke existing resource APIs (prefer exports over raw eval when possible)
 4. **Remember** — store task context in Node `/memory` or MTA `memorySet`
 5. **Verify** — re-query state after changes
 
@@ -1488,9 +1530,9 @@ agent/
 │   │   ├── credentials.js
 │   │   ├── mta-client.js
 │   │   ├── features/
-│   │   └── lib/
+│   │   └── lib/           ← includes the mta-api signature index
 │   ├── scripts/           ← ops CLI (restart-middleware, track-all-elements)
-│   ├── test/              ← smoke tests (test-auth, verify-look, debug-log)
+│   ├── test/              ← smoke tests (test-auth, verify-look, debug-log, mta-api)
 │   ├── experiments/       ← one-off probes (not production)
 │   ├── index.js           ← shim → middleware
 │   ├── mcp-server.js      ← shim → mcp

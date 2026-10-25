@@ -1,12 +1,22 @@
 const { success, failure, asyncRoute } = require("../../shared/lib/respond");
 const { withPlayer } = require("../../shared/lib/player-session");
 const { buildToolsManifest } = require("../../shared/lib/tools-manifest");
-const { listFeatures, runFeature } = require("../../shared/features");
+const { listFeatures, runFeature, getFeature } = require("../../shared/features");
 const { httpError } = require("../../shared/lib/http-error");
 
 async function runFeatureRoute(ctx, req, res, featureId) {
   const body = req.body || {};
   const { player: explicitPlayer, serial: explicitSerial, ...options } = body;
+  const feature = getFeature(featureId);
+  if (feature && feature.requiresPlayer === false) {
+    const result = await runFeature(featureId, ctx.mta, options);
+    success(res, result, {
+      feature: featureId,
+      player: null,
+      serial: null,
+    });
+    return;
+  }
   let resolvedRef;
 
   const result = await withPlayer(ctx, explicitPlayer, async (player, serial, ref) => {

@@ -11,6 +11,7 @@ class FeatureRegistry {
       id,
       description: definition.description || "",
       params: definition.params || {},
+      requiresPlayer: definition.requiresPlayer !== false,
       run: definition.run,
     });
     return this;
